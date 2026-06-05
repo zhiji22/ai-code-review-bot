@@ -1,0 +1,65 @@
+# requirements.txt
+# AI Code Review Bot - Python Dependencies
+
+# --- Web 框架 ---
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.12
+
+# --- 数据库 ---
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+psycopg[binary]==3.2.3
+
+# --- Redis ---
+redis[hiredis]==5.2.0
+
+# --- Celery ---
+celery[redis]==5.4.0
+flower==2.0.1
+
+# --- LLM ---
+openai==1.57.0
+tiktoken==0.8.0
+anthropic==0.40.0       # 可选: Claude 作为备选 LLM
+
+# --- AST 分析 ---
+tree-sitter==0.23.2
+tree-sitter-python==0.23.6
+tree-sitter-javascript==0.23.0
+tree-sitter-typescript==0.23.2
+
+# --- GitHub API ---
+PyGithub==2.5.0
+gidgethub==5.3.0
+httpx==0.28.1
+
+# --- 安全/认证 ---
+pyjwt[crypto]==2.10.1
+cryptography==44.0.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# --- 工具库 ---
+pydantic==2.10.3
+pydantic-settings==2.6.0
+python-dotenv==1.0.1
+structlog==24.4.0
+rich==13.9.4
+
+# --- 测试 ---
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+respx==0.21.1          # mock httpx 请求
+fakeredis==2.26.1       # mock Redis
+
+# --- 代码质量 ---
+ruff==0.8.4
+mypy==1.13.0
+pre-commit==4.0.1
+
+# --- 监控 ---
+prometheus-client==0.21.1
+sentry-sdk[fastapi]==2.19.2

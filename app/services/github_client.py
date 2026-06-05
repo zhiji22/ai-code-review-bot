@@ -1,0 +1,320 @@
+"""GitHub API client wrapper using PyGithub.
+
+Provides async-friendly access to PR diffs, file contents, and comment posting.
+Uses PyGithub under the hood with httpx for async operations.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import base64
+import logging
+from dataclasses import dataclass, field
+from typing import Any
+
+import httpx
+from github import Github, GithubException
+from github.Auth import AppAuth
+from github.PullRequest import PullRequest
+from github.Repository import Repository
+
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class FileDiff:
+    """Represents a single file's diff in a PR."""
+
+    file_path: str
+    status: str  # added, modified, removed, renamed
+    additions: int
+    deletions: int
+    raw_patch: str  # unified diff patch text
+    content: str = ""  # full file content (fetched separately if needed)
+    language: str = ""  # detected programming language
+
+    @property
+    def is_code_file(self) -> bool:
+        """Check if this file is a supported code file."""
+        CODE_EXTENSIONS = {
+            ".py": "python",
+            ".js": "javascript",
+            ".ts": "typescript",
+            ".jsx": "javascript",
+            ".tsx": "typescript",
+            ".java": "java",
+            ".go": "go",
+            ".rs": "rust",
+            ".rb": "ruby",
+            ".cpp": "cpp",
+            ".cc": "cpp",
+            ".cxx": "cpp",
+            ".h": "cpp",
+            ".hpp": "cpp",
+        }
+        from pathlib import Path
+
+        ext = Path(self.file_path).suffix.lower()
+        return ext in CODE_EXTENSIONS
+
+    @property
+    def lines_of_code(self) -> int:
+        """Count added lines (approximation for review scope)."""
+        return self.additions
+
+
+@dataclass
+class PRInfo:
+    """Basic PR metadata."""
+
+    number: int
+    title: str
+    body: str
+    head_sha: str
+    base_sha: str
+    author: str
+    additions: int
+    deletions: int
+    changed_files: int
+
+
+class GitHubClient:
+    """Async-compatible GitHub API client.
+
+    Uses PyGithub for GitHub App auth + httpx for async API calls.
+    """
+
+    def __init__(
+        self,
+        token: str | None = None,
+        installation_id: int | None = None,
+    ):
+        self._token = token
+        self._installation_id = installation_id
+        self._gh: Github | None = None
+        self._http: httpx.AsyncClient | None = None
+
+    async def _ensure_client(self) -> httpx.AsyncClient:
+        """Lazily init httpx client."""
+        if self._http is None:
+            headers = {
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            }
+            if self._token:
+                headers["Authorization"] = f"token {self._token}"
+            self._http = httpx.AsyncClient(
+                base_url="https://api.github.com",
+                headers=headers,
+                timeout=30.0,
+            )
+        return self._http
+
+    def _get_sync_client(self) -> Github:
+        """Get PyGithub sync client for operations not covered by REST."""
+        if self._gh is None:
+            if self._token:
+                self._gh = Github(auth=AppAuth.TokenAuth(self._token))
+            else:
+                self._gh = Github()
+        return self._gh
+
+    async def get_pr_info(
+        self, repo_full_name: str, pr_number: int
+    ) -> PRInfo:
+        """Fetch PR metadata."""
+        client = await self._ensure_client()
+        resp = await client.get(
+            f"/repos/{repo_full_name}/pulls/{pr_number}"
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return PRInfo(
+            number=data["number"],
+            title=data["title"],
+            body=data.get("body") or "",
+            head_sha=data["head"]["sha"],
+            base_sha=data["base"]["sha"],
+            author=data["user"]["login"],
+            additions=data["additions"],
+            deletions=data["deletions"],
+            changed_files=data["changed_files"],
+        )
+
+    async def get_pr_files(
+        self, repo_full_name: str, pr_number: int
+    ) -> list[FileDiff]:
+        """Fetch all changed files in a PR with diffs."""
+        client = await self._ensure_client()
+        files: list[FileDiff] = []
+        page = 1
+        per_page = 100
+
+        while True:
+            resp = await client.get(
+                f"/repos/{repo_full_name}/pulls/{pr_number}/files",
+                params={"page": page, "per_page": per_page},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if not data:
+                break
+
+            for item in data:
+                fd = FileDiff(
+                    file_path=item["filename"],
+                    status=item["status"],
+                    additions=item.get("additions", 0),
+                    deletions=item.get("deletions", 0),
+                    raw_patch=item.get("patch", ""),
+                )
+                fd.language = _detect_language(fd.file_path)
+                files.append(fd)
+
+            if len(data) < per_page:
+                break
+            page += 1
+
+        return files
+
+    async def get_file_content(
+        self, repo_full_name: str, file_path: str, ref: str
+    ) -> str:
+        """Fetch raw file content at a specific ref."""
+        client = await self._ensure_client()
+        resp = await client.get(
+            f"/repos/{repo_full_name}/contents/{file_path}",
+            params={"ref": ref},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("encoding") == "base64":
+            return base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+        return data.get("content", "")
+
+    async def post_review_comment(
+        self,
+        repo_full_name: str,
+        pr_number: int,
+        body: str,
+    ) -> dict[str, Any]:
+        """Post a general PR review comment (not line-level)."""
+        client = await self._ensure_client()
+        resp = await client.post(
+            f"/repos/{repo_full_name}/issues/{pr_number}/comments",
+            json={"body": body},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    async def post_inline_comments(
+        self,
+        repo_full_name: str,
+        pr_number: int,
+        commit_sha: str,
+        comments: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Post a review with inline line-level comments.
+
+        Each comment dict should have:
+        - path: file path
+        - line: line number (or line_end with multi_line)
+        - body: comment text
+        - side: "RIGHT" (default)
+        """
+        client = await self._ensure_client()
+        payload: dict[str, Any] = {
+            "commit_id": commit_sha,
+            "event": "COMMENT",
+            "comments": comments,
+        }
+        resp = await client.post(
+            f"/repos/{repo_full_name}/pulls/{pr_number}/reviews",
+            json=payload,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    async def update_review_status(
+        self,
+        repo_full_name: str,
+        pr_sha: str,
+        state: str,  # success, failure, pending, error
+        context: str = "AI Code Review",
+        description: str = "",
+        target_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Update commit status check."""
+        client = await self._ensure_client()
+        payload: dict[str, Any] = {
+            "state": state,
+            "context": context,
+            "description": description[:140],  # GitHub limit
+        }
+        if target_url:
+            payload["target_url"] = target_url
+        resp = await client.post(
+            f"/repos/{repo_full_name}/statuses/{pr_sha}",
+            json=payload,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    async def check_rate_limit(self) -> dict[str, int]:
+        """Check current GitHub API rate limit."""
+        client = await self._ensure_client()
+        resp = await client.get("/rate_limit")
+        resp.raise_for_status()
+        core = resp.json()["resources"]["core"]
+        return {
+            "limit": core["limit"],
+            "remaining": core["remaining"],
+            "reset": core["reset"],
+        }
+
+    async def close(self) -> None:
+        if self._http:
+            await self._http.aclose()
+            self._http = None
+
+
+def _detect_language(file_path: str) -> str:
+    """Detect programming language from file extension."""
+    from pathlib import Path
+
+    LANG_MAP = {
+        ".py": "python",
+        ".js": "javascript",
+        ".jsx": "javascript",
+        ".ts": "typescript",
+        ".tsx": "typescript",
+        ".java": "java",
+        ".go": "go",
+        ".rs": "rust",
+        ".rb": "ruby",
+        ".cpp": "cpp",
+        ".cc": "cpp",
+        ".cxx": "cpp",
+        ".h": "cpp",
+        ".hpp": "cpp",
+        ".cs": "csharp",
+        ".php": "php",
+        ".swift": "swift",
+        ".kt": "kotlin",
+    }
+    ext = Path(file_path).suffix.lower()
+    return LANG_MAP.get(ext, "unknown")
+
+
+# --- Factory ---
+
+async def get_github_client(installation_id: int | None = None) -> GitHubClient:
+    """Create a GitHub client for a given installation.
+
+    In production, this would exchange the installation_id for an
+    installation token via GitHub App auth. For dev, use GITHUB_TOKEN.
+    """
+    token = settings.github_token or None
+    return GitHubClient(token=token, installation_id=installation_id)

@@ -1,0 +1,119 @@
+# Deploy to staging/production via SSH on push to main
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "frontend/src/**"
+      - "docker-compose.yml"
+      - "Dockerfile.*"
+      - "requirements.txt"
+      - "alembic/**"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment || 'staging' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.environment || 'staging' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create deployment archive
+        run: |
+          tar czf deploy.tar.gz \
+            app/ \
+            frontend/src/ \
+            frontend/package.json \
+            frontend/vite.config.ts \
+            frontend/tsconfig.json \
+            frontend/tailwind.config.ts \
+            frontend/postcss.config.js \
+            frontend/index.html \
+            docker-compose.yml \
+            docker/ \
+            Dockerfile.backend \
+            Dockerfile.frontend \
+            requirements.txt \
+            alembic/ \
+            alembic.ini \
+            pyproject.toml \
+            scripts/ \
+            .env.example
+
+      - name: Upload to server
+        run: |
+          scp -i ~/.ssh/deploy_key deploy.tar.gz \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/deploy.tar.gz
+
+      - name: Deploy on server
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            set -euo pipefail
+            cd ${{ secrets.DEPLOY_PATH || '/opt/ai-code-review-bot' }}
+
+            # Backup current state
+            if [ -d ".git" ]; then
+              git stash || true
+            fi
+
+            # Extract new code
+            tar xzf /tmp/deploy.tar.gz -C .
+
+            # Pull latest images and restart services
+            docker compose pull
+            docker compose build --no-cache backend frontend
+
+            # Run database migrations
+            docker compose run --rm backend alembic upgrade head
+
+            # Restart all services
+            docker compose up -d --remove-orphans
+
+            # Health check
+            sleep 15
+            curl -fsS http://localhost:8000/health || exit 1
+
+            # Cleanup
+            rm /tmp/deploy.tar.gz
+            docker image prune -f
+          EOF
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: ${{ secrets.SLACK_CHANNEL || '#deployments' }}
+          text: "Deploy failed for ai-code-review-bot (${{ github.event.inputs.environment || 'staging' }})"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        continue-on-error: true
+
+      - name: Cleanup SSH
+        if: always()
+        run: rm -f ~/.ssh/deploy_key deploy.tar.gz
