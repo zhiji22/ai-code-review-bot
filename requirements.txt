@@ -31,8 +31,6 @@ tree-sitter-javascript==0.23.0
 tree-sitter-typescript==0.23.2
 
 # --- GitHub API ---
-PyGithub==2.5.0
-gidgethub==5.3.0
 httpx==0.28.1
 
 # --- 安全/认证 ---
@@ -42,7 +40,7 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
 # --- 工具库 ---
-pydantic==2.10.3
+pydantic[email]==2.10.3
 pydantic-settings==2.6.0
 python-dotenv==1.0.1
 structlog==24.4.0
@@ -62,4 +60,5 @@ pre-commit==4.0.1
 
 # --- 监控 ---
 prometheus-client==0.21.1
+prometheus-fastapi-instrumentator==7.0.0
 sentry-sdk[fastapi]==2.19.2

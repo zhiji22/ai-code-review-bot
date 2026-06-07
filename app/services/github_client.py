@@ -1,26 +1,25 @@
-"""GitHub API client wrapper using PyGithub.
+"""GitHub API client wrapper.
 
 Provides async-friendly access to PR diffs, file contents, and comment posting.
-Uses PyGithub under the hood with httpx for async operations.
+Uses httpx for async operations with GitHub App authentication.
 """
 
 from __future__ import annotations
 
 import asyncio
 import base64
-import logging
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import httpx
-from github import Github, GithubException
-from github.Auth import AppAuth
-from github.PullRequest import PullRequest
-from github.Repository import Repository
+import jwt
+import structlog
 
 from app.core.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -93,7 +92,6 @@ class GitHubClient:
     ):
         self._token = token
         self._installation_id = installation_id
-        self._gh: Github | None = None
         self._http: httpx.AsyncClient | None = None
 
     async def _ensure_client(self) -> httpx.AsyncClient:
@@ -111,15 +109,6 @@ class GitHubClient:
                 timeout=30.0,
             )
         return self._http
-
-    def _get_sync_client(self) -> Github:
-        """Get PyGithub sync client for operations not covered by REST."""
-        if self._gh is None:
-            if self._token:
-                self._gh = Github(auth=AppAuth.TokenAuth(self._token))
-            else:
-                self._gh = Github()
-        return self._gh
 
     async def get_pr_info(
         self, repo_full_name: str, pr_number: int
@@ -308,13 +297,91 @@ def _detect_language(file_path: str) -> str:
     return LANG_MAP.get(ext, "unknown")
 
 
-# --- Factory ---
+# --- GitHub App Authentication ---
+
+_cached_private_key: str | None = None
+_token_cache: dict[int, tuple[str, float]] = {}
+_APP_HEADERS = {
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+}
+
+
+def _read_private_key() -> str:
+    """Read and cache the GitHub App private key."""
+    global _cached_private_key
+    if _cached_private_key is None:
+        key_path = Path(settings.github_app_private_key_path)
+        if not key_path.exists():
+            raise FileNotFoundError("GitHub App private key not found")
+        _cached_private_key = key_path.read_text()
+    return _cached_private_key
+
+
+def _generate_jwt() -> str:
+    """Generate a JWT for GitHub App authentication."""
+    now = int(time.time())
+    payload = {
+        "iat": now - 60,
+        "exp": now + (10 * 60),
+        "iss": settings.github_app_id,
+    }
+    return jwt.encode(payload, _read_private_key(), algorithm="RS256")
+
+
+async def _get_installation_token(installation_id: int) -> str:
+    """Exchange a GitHub App JWT for an installation access token (cached)."""
+    cached = _token_cache.get(installation_id)
+    if cached and cached[1] > time.time() - 300:
+        return cached[0]
+
+    app_jwt = _generate_jwt()
+    async with httpx.AsyncClient(
+        base_url="https://api.github.com",
+        headers={**_APP_HEADERS, "Authorization": f"Bearer {app_jwt}"},
+        timeout=30.0,
+    ) as client:
+        resp = await client.post(
+            f"/app/installations/{installation_id}/access_tokens"
+        )
+        resp.raise_for_status()
+        token = resp.json()["token"]
+
+    _token_cache[installation_id] = (token, time.time())
+    return token
+
+
+async def _list_installations() -> list[dict[str, Any]]:
+    """List all installations of the GitHub App."""
+    app_jwt = _generate_jwt()
+    async with httpx.AsyncClient(
+        base_url="https://api.github.com",
+        headers={**_APP_HEADERS, "Authorization": f"Bearer {app_jwt}"},
+        timeout=30.0,
+    ) as client:
+        resp = await client.get("/app/installations")
+        resp.raise_for_status()
+        return resp.json()
+
 
 async def get_github_client(installation_id: int | None = None) -> GitHubClient:
     """Create a GitHub client for a given installation.
 
-    In production, this would exchange the installation_id for an
-    installation token via GitHub App auth. For dev, use GITHUB_TOKEN.
+    If installation_id is provided, uses GitHub App auth to get an
+    installation token. Falls back to GITHUB_TOKEN env var for dev.
     """
-    token = settings.github_token or None
-    return GitHubClient(token=token, installation_id=installation_id)
+    if installation_id:
+        token = await _get_installation_token(installation_id)
+        return GitHubClient(token=token, installation_id=installation_id)
+
+    if settings.github_token:
+        return GitHubClient(token=settings.github_token)
+
+    logger.warning("no_installation_id_falling_back_to_first")
+    installations = await _list_installations()
+    if installations:
+        inst = installations[0]
+        token = await _get_installation_token(inst["id"])
+        return GitHubClient(token=token, installation_id=inst["id"])
+
+    return GitHubClient()
