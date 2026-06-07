@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [code, setCode] = useState("");
 
-  const isDev = import.meta.env.DEV;
+  const showDevLogin = import.meta.env.DEV;
 
   const handleDevLogin = async () => {
     setLoading(true);
@@ -30,14 +30,7 @@ export default function LoginPage() {
           email: "dev@test.com",
           avatar_url: null,
           name: "Dev User",
-          is_active: true,
           is_admin: true,
-          github_id: 999999,
-          bio: null,
-          company: null,
-          location: null,
-          last_login_at: new Date().toISOString(),
-          created_at: new Date().toISOString(),
         },
       );
       navigate("/");
@@ -88,7 +81,7 @@ export default function LoginPage() {
           <CardDescription>Sign in to get started</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {isDev && (
+          {showDevLogin && (
             <Button onClick={handleDevLogin} className="w-full" size="lg" disabled={loading}>
               {loading ? <Spinner /> : "Dev Login (no GitHub required)"}
             </Button>

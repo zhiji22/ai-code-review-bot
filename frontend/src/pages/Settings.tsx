@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,10 +6,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { reposApi, type RepoSettings } from "@/lib/api";
-import { Save } from "lucide-react";
+import { Save, CheckCircle, XCircle } from "lucide-react";
+
+const DEFAULT_SETTINGS: RepoSettings = {
+  auto_review: true,
+  languages: [],
+  exclude_patterns: [],
+  severity_threshold: "warning",
+  max_files_per_review: 100,
+  enable_llm: true,
+  enable_ast: true,
+  enable_rules: true,
+  custom_rules_only: false,
+};
 
 export default function SettingsPage() {
-  const queryClient = useQueryClient();
   const { data: repos, isLoading } = useQuery({
     queryKey: ["repositories"],
     queryFn: reposApi.list,
@@ -30,7 +41,7 @@ export default function SettingsPage() {
         <p className="text-muted-foreground">Manage repository configurations</p>
       </div>
 
-	      {!repos?.items.length ? (
+            {!repos?.items.length ? (
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">No repositories configured yet.</p>
@@ -41,7 +52,7 @@ export default function SettingsPage() {
         </Card>
       ) : (
         <div className="grid gap-4">
-	          {repos?.items.map((repo) => (
+                {repos?.items.map((repo) => (
             <RepoSettingCard key={repo.id} repo={repo} />
           ))}
         </div>
@@ -52,14 +63,31 @@ export default function SettingsPage() {
 
 function RepoSettingCard({ repo }: { repo: Awaited<ReturnType<typeof reposApi.list>>["items"][number] }) {
   const queryClient = useQueryClient();
-  const [settings, setSettings] = useState<RepoSettings>(repo.settings);
+  const [settings, setSettings] = useState<RepoSettings>({ ...DEFAULT_SETTINGS, ...repo.settings });
   const [dirty, setDirty] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  useEffect(() => {
+    setSettings({ ...DEFAULT_SETTINGS, ...repo.settings });
+    setDirty(false);
+  }, [repo.settings]);
+
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = setTimeout(() => setFeedback(null), 3000);
+    return () => clearTimeout(timer);
+  }, [feedback]);
 
   const updateMutation = useMutation({
     mutationFn: () => reposApi.updateSettings(repo.id, settings),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["repositories"] });
       setDirty(false);
+      setFeedback({ type: "success", message: "Settings saved successfully!" });
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Failed to save settings";
+      setFeedback({ type: "error", message });
     },
   });
 
@@ -147,7 +175,21 @@ function RepoSettingCard({ repo }: { repo: Awaited<ReturnType<typeof reposApi.li
           />
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-end gap-2">
+          {feedback && (
+            <span
+              className={`flex items-center gap-1 text-sm ${
+                feedback.type === "success" ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {feedback.type === "success" ? (
+                <CheckCircle className="h-4 w-4" />
+              ) : (
+                <XCircle className="h-4 w-4" />
+              )}
+              {feedback.message}
+            </span>
+          )}
           <Button
             onClick={() => updateMutation.mutate()}
             disabled={!dirty || updateMutation.isPending}

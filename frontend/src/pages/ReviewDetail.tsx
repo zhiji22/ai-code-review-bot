@@ -16,12 +16,20 @@ export default function ReviewDetailPage() {
     queryKey: ["review", reviewId],
     queryFn: () => reviewsApi.getById(reviewId),
     enabled: !!reviewId,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const pending = data?.status !== "completed" && data?.status !== "failed";
+      return pending ? 5_000 : false;
+    },
   });
+
+  const isInProgress = review?.status !== "completed" && review?.status !== "failed";
 
   const { data: comments } = useQuery({
     queryKey: ["review", reviewId, "comments"],
     queryFn: () => reviewsApi.getComments(reviewId),
     enabled: !!reviewId,
+    refetchInterval: isInProgress ? 5_000 : false,
   });
 
   if (isLoading || !review) {
@@ -33,7 +41,7 @@ export default function ReviewDetailPage() {
   }
 
   // Group comments by file
-  const commentsByFile = (comments ?? []).reduce<Record<string, typeof comments>>((acc, c) => {
+  const commentsByFile = (comments ?? []).reduce<Record<string, NonNullable<typeof comments>>>((acc, c) => {
     (acc[c.file_path] ??= []).push(c);
     return acc;
   }, {});

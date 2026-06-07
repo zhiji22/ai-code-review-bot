@@ -13,7 +13,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       "/api": {
-        target: "http://localhost:8002",
+        target: "http://127.0.0.1:8000",
         changeOrigin: true,
       },
     },
@@ -21,10 +21,5 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: true,
-  },
-  test: {
-    globals: true,
-    environment: "jsdom",
-    setupFiles: ["./src/test-setup.ts"],
   },
 });

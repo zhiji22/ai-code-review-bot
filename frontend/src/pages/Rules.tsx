@@ -154,7 +154,7 @@ function RuleRow({
         <Badge className={severityColor(rule.severity)}>{rule.severity}</Badge>
       </TableCell>
       <TableCell className="text-xs text-muted-foreground">
-        {rule.languages.join(", ")}
+        {(rule.languages ?? []).join(", ")}
       </TableCell>
       <TableCell>
         <Badge variant={rule.enabled ? "default" : "secondary"}>

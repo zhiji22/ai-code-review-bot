@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useIsFetching } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { statsApi, reviewsApi } from "@/lib/api";
 import { formatNumber, formatCost, scoreColor } from "@/lib/utils";
@@ -27,6 +26,7 @@ const PIE_COLORS = ["#ef4444", "#f59e0b", "#3b82f6"];
 
 export default function DashboardPage() {
   const [hydrated, setHydrated] = useState(false);
+  const isFetching = useIsFetching({ queryKey: ["stats"] }) > 0;
 
   useEffect(() => setHydrated(true), []);
 
@@ -82,9 +82,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">Overview of your code review metrics</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">Overview of your code review metrics</p>
+        </div>
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className={`inline-block h-2 w-2 rounded-full ${isFetching ? "bg-blue-500 animate-pulse" : "bg-muted-foreground/40"}`} />
+          Auto-refresh
+        </span>
       </div>
 
       {/* Stat cards */}
