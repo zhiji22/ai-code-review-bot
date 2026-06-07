@@ -156,7 +156,7 @@ class StatsService:
         for row in result:
             points.append(
                 TrendPointSchema(
-                    date=row.date.date() if row.date else None,
+                    date=row.date.date() if hasattr(row.date, 'date') else row.date,
                     reviews=int(row.reviews or 0),
                     issues=int(row.issues or 0),
                     critical=int(row.critical or 0),

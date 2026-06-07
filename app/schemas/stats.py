@@ -28,7 +28,7 @@ class OverviewStatsSchema(BaseModel):
 class TrendPointSchema(BaseModel):
     """Single data point in a trend chart."""
 
-    date: str  # ISO date
+    date: date  # ISO date
     reviews: int = 0
     issues: int = 0
     critical: int = 0

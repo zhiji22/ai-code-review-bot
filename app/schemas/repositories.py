@@ -55,9 +55,11 @@ class RepositoryListSchema(BaseModel):
     owner: str
     name: str
     language: str | None = None
+    is_private: bool = False
     is_active: bool = True
     total_reviews: int = 0
     last_review_at: datetime | None = None
+    settings: dict[str, Any] = Field(default_factory=dict)
 
 
 class RepositoryUpdateSchema(BaseModel):

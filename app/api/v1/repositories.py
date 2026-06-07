@@ -45,6 +45,7 @@ async def list_repositories(
             language=r.language,
             total_reviews=r.total_reviews,
             last_review_at=r.last_review_at,
+            settings=r.settings or {},
         )
         for r in repos
     ]

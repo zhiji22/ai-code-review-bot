@@ -7,7 +7,6 @@ Per DESIGN.md §3: Webhook Handler with HMAC verification + idempotency + queue.
 from __future__ import annotations
 
 import json
-import logging
 
 import structlog
 from fastapi import APIRouter, Header, Request, status
@@ -88,7 +87,7 @@ async def receive_webhook(
     # Queue review task
     from app.tasks.review_tasks import queue_pr_review
 
-    task = await queue_pr_review(
+    task = queue_pr_review.delay(
         repo_full_name=event.repository.full_name,
         pr_number=event.number,
         commit_sha=event.pull_request.head.sha,
@@ -107,7 +106,6 @@ async def receive_webhook(
         "status": "accepted",
         "event": "pull_request",
         "task_id": task.id,
-        "idempotency_key": idem_key,
     }
 
 
