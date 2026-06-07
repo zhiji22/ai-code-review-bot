@@ -64,6 +64,11 @@ frontend/build/
 frontend/.vite/
 frontend/coverage/
 frontend/.eslintcache
+frontend/tsconfig.tsbuildinfo
+frontend/src/**/*.js
+frontend/src/*.js
+frontend/vite.config.js
+.vite/
 
 # Logs
 logs/
@@ -87,6 +92,9 @@ github-app-private-key.pem
 *.sql
 *.dump
 backups/
+
+# Demo / seed
+seed_demo.py
 
 # Temp
 tmp/
