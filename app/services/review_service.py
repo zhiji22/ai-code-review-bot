@@ -13,7 +13,6 @@ from sqlalchemy import select, update, func, and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.review_engine import ReviewEngine
 from app.models.review import Review, ReviewComment
 from app.models.repository import Repository
 from app.schemas.reviews import (

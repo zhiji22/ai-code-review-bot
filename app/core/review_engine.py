@@ -14,7 +14,7 @@ Error handling: each analyzer fails independently; partial results are acceptabl
 from __future__ import annotations
 
 import asyncio
-import logging
+import structlog
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -29,7 +29,7 @@ from app.core.config import settings
 from app.services.comment_formatter import CommentFormatter
 from app.services.github_client import FileDiff, GitHubClient, PRInfo
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -362,12 +362,20 @@ class ReviewEngine:
                 result.aggregated, max_comments=self.max_inline_comments
             )
             if inline_payload:
-                await client.post_inline_comments(
-                    repo_full_name,
-                    pr_number,
-                    commit_sha,
-                    inline_payload,
-                )
+                try:
+                    await client.post_inline_comments(
+                        repo_full_name,
+                        pr_number,
+                        commit_sha,
+                        inline_payload,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "inline_comments_failed",
+                        repo=repo_full_name,
+                        pr=pr_number,
+                        error=str(e),
+                    )
 
             # Update commit status
             status = "success" if result.aggregated.critical_count == 0 else "failure"
