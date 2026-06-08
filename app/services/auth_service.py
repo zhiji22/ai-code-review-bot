@@ -63,11 +63,15 @@ class AuthService:
     async def github_oauth_exchange(
         self,
         code: str,
-        state: str,
+        state: str | None,
     ) -> dict[str, Any]:
         """Exchange GitHub OAuth code for access token + user info."""
+        import logging
+        logger = logging.getLogger(__name__)
+
         async with httpx.AsyncClient() as client:
             # Exchange code → access_token
+            logger.info("GitHub OAuth: exchanging code for access token")
             token_resp = await client.post(
                 "https://github.com/login/oauth/access_token",
                 json={
@@ -80,6 +84,11 @@ class AuthService:
             )
             token_resp.raise_for_status()
             token_data = token_resp.json()
+            logger.info("GitHub OAuth: token response keys=%s", list(token_data.keys()))
+
+            if "error" in token_data:
+                raise ValueError(f"GitHub OAuth error: {token_data['error']} — {token_data.get('error_description', '')}")
+
             access_token = token_data.get("access_token")
             if not access_token:
                 raise ValueError("GitHub OAuth: no access_token returned")

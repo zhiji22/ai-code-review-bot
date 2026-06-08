@@ -96,6 +96,9 @@ backups/
 # Demo / seed
 seed_demo.py
 
+# Docker bind mount data
+data/
+
 # Temp
 tmp/
 temp/

@@ -49,9 +49,20 @@ class GitHubLoginSchema(BaseModel):
     state: str | None = None
 
 
+class GitHubLoginResponseSchema(BaseModel):
+    """GitHub OAuth login response — tokens + user profile."""
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int = 900  # 15 min
+    user: UserSchema
+
+
 __all__ = [
     "UserSchema",
     "TokenSchema",
     "TokenRefreshSchema",
     "GitHubLoginSchema",
+    "GitHubLoginResponseSchema",
 ]

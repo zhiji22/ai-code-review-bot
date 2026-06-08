@@ -1,20 +1,23 @@
-version: "3.9"
+name: review-bot
 
 services:
   # ─────────────────────────────────────────────
   # Reverse Proxy (SSL termination)
   # ─────────────────────────────────────────────
   nginx:
-    image: nginx:1.25-alpine
-    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+
     ports:
       - "80:80"
-    volumes:
-      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - frontend_dist:/usr/share/nginx/html:ro
+
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+
     networks:
       - review_net
 
@@ -29,8 +32,6 @@ services:
     env_file: .env
     volumes:
       - ${GITHUB_APP_KEY_PATH:-./github-app-private-key.pem}:/app/private-key.pem:ro
-    ports:
-      - "8000:8000"
     expose:
       - "8000"
     depends_on:
@@ -47,7 +48,7 @@ services:
       resources:
         limits:
           cpus: "2.0"
-          memory: 1G
+          memory: 512M
         reservations:
           memory: 256M
     networks:
@@ -62,17 +63,24 @@ services:
       dockerfile: Dockerfile.backend
     restart: unless-stopped
     env_file: .env
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy    # 等 redis 真正就绪
+      postgres:
+        condition: service_healthy    # 等 postgres 真正就绪
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping --timeout 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     deploy:
       resources:
         limits:
-          cpus: "4.0"
-          memory: 2G
-        reservations:
+          cpus: "1.5"
           memory: 512M
+        reservations:
+          memory: 256M
     networks:
       - review_net
 
@@ -87,7 +95,15 @@ services:
     env_file: .env
     command: celery -A app.tasks.celery_app beat --loglevel=info
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' > /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     deploy:
       resources:
         limits:
@@ -96,34 +112,23 @@ services:
       - review_net
 
   # ─────────────────────────────────────────────
-  # Flower (Celery monitoring)
+  # Flower (Celery monitoring) — uncomment to enable
   # ─────────────────────────────────────────────
-  flower:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
-    restart: unless-stopped
-    env_file: .env
-    command: celery -A app.tasks.celery_app flower --port=5555
-    expose:
-      - "5555"
-    depends_on:
-      - redis
-    networks:
-      - review_net
-
-  # ─────────────────────────────────────────────
-  # Frontend (build stage → static files)
-  # ─────────────────────────────────────────────
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    restart: unless-stopped
-    volumes:
-      - frontend_dist:/app/dist
-    networks:
-      - review_net
+  # flower:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.backend
+  #   restart: unless-stopped
+  #   env_file: .env
+  #   command: celery -A app.tasks.celery_app flower --port=5555
+  #     --basic-auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:?FLOWER_PASSWORD not set}
+  #   expose:
+  #     - "5555"
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - review_net
 
   # ─────────────────────────────────────────────
   # PostgreSQL + pgvector
@@ -134,9 +139,10 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-review_bot}
       POSTGRES_USER: ${POSTGRES_USER:-review}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-review_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 未设置，请在 .env 中配置}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-review} -d ${POSTGRES_DB:-review_bot}"]
       interval: 10s
@@ -145,7 +151,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 512M
     networks:
       - review_net
 
@@ -155,58 +161,64 @@ services:
   redis:
     image: redis:7.2-alpine
     restart: unless-stopped
-    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru --appendonly yes
+    command:
+      - redis-server
+      - --maxmemory
+      - 200mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - "${REDIS_PASSWORD}"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 256M
     networks:
       - review_net
 
   # ─────────────────────────────────────────────
   # Prometheus
   # ─────────────────────────────────────────────
-  prometheus:
-    image: prom/prometheus:latest
-    restart: unless-stopped
-    volumes:
-      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    expose:
-      - "9090"
-    networks:
-      - review_net
+  # prometheus:
+  #   image: prom/prometheus:v3.2.0
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #     - prometheus_data:/prometheus
+  #   expose:
+  #     - "9090"
+  #   networks:
+  #     - review_net
 
   # ─────────────────────────────────────────────
   # Grafana
   # ─────────────────────────────────────────────
-  grafana:
-    image: grafana/grafana:latest
-    restart: unless-stopped
-    environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-    volumes:
-      - grafana_data:/var/lib/grafana
-    expose:
-      - "3000"
-    depends_on:
-      - prometheus
-    networks:
-      - review_net
+  # grafana:
+  #   image: grafana/grafana:11.5.0
+  #   restart: unless-stopped
+  #   environment:
+  #     GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD 未设置，请在 .env 中配置}
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #   expose:
+  #     - "3000"
+  #   depends_on:
+  #     - prometheus
+  #   networks:
+  #     - review_net
 
 volumes:
   postgres_data:
   redis_data:
-  prometheus_data:
-  grafana_data:
-  frontend_dist:
 
 networks:
   review_net:
