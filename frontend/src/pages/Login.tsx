@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,12 +10,45 @@ import { Bot, Github } from "lucide-react";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const setAuth = useAuthStore((s) => s.setAuth);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [code, setCode] = useState("");
 
   const showDevLogin = import.meta.env.DEV;
+
+  // Auto-handle GitHub OAuth callback: extract `code` from URL and exchange for token
+  useEffect(() => {
+    const oauthCode = searchParams.get("code");
+    if (!oauthCode) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    authApi
+      .github(oauthCode)
+      .then((result) => {
+        if (cancelled) return;
+        setAuth(
+          { access_token: result.access_token, refresh_token: result.refresh_token },
+          result.user,
+        );
+        navigate("/", { replace: true });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError("GitHub authentication failed. Please try again.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, setAuth, navigate]);
 
   const handleDevLogin = async () => {
     setLoading(true);
