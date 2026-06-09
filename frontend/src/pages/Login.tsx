@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,12 @@ import { Bot, Github } from "lucide-react";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const setAuth = useAuthStore((s) => s.setAuth);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [code, setCode] = useState("");
+  const lastCodeRef = useRef<string | null>(null);
 
   const showDevLogin = import.meta.env.DEV;
 
@@ -22,6 +23,16 @@ export default function LoginPage() {
   useEffect(() => {
     const oauthCode = searchParams.get("code");
     if (!oauthCode) return;
+
+    // Prevent double-exchange of the same code (React StrictMode, re-renders, etc.)
+    // In StrictMode: Mount #1 sets ref + cleans URL → unmount → Mount #2 sees
+    // cleaned URL (no code param) and returns early. The ref guard is a safety net
+    // for non-StrictMode scenarios where re-renders preserve the URL parameter.
+    if (oauthCode === lastCodeRef.current) return;
+    lastCodeRef.current = oauthCode;
+
+    // Clean the URL immediately to prevent code re-use on page reload
+    setSearchParams({}, { replace: true });
 
     let cancelled = false;
     setLoading(true);
@@ -37,8 +48,9 @@ export default function LoginPage() {
         );
         navigate("/", { replace: true });
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return;
+        if (import.meta.env.DEV) console.error("GitHub OAuth exchange failed:", err);
         setError("GitHub authentication failed. Please try again.");
       })
       .finally(() => {
@@ -48,7 +60,7 @@ export default function LoginPage() {
     return () => {
       cancelled = true;
     };
-  }, [searchParams, setAuth, navigate]);
+  }, [searchParams, setAuth, navigate, setSearchParams]);
 
   const handleDevLogin = async () => {
     setLoading(true);

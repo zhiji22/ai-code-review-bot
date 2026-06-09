@@ -6,8 +6,10 @@ Auth service — JWT tokens, GitHub OAuth flow, user management.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, TypedDict
 
 import httpx
 import jwt
@@ -16,6 +18,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
+
+
+class GitHubOAuthResult(TypedDict):
+    """Return type for github_oauth_exchange."""
+
+    user: User
+    github_token: str
+    github_data: dict[str, Any]
 
 
 class AuthService:
@@ -64,30 +76,58 @@ class AuthService:
         self,
         code: str,
         state: str | None,
-    ) -> dict[str, Any]:
-        """Exchange GitHub OAuth code for access token + user info."""
-        import logging
-        logger = logging.getLogger(__name__)
+    ) -> GitHubOAuthResult:
+        """Exchange GitHub OAuth code for access token + user info.
 
-        async with httpx.AsyncClient() as client:
-            # Exchange code → access_token
+        Note: GitHub OAuth codes are single-use. The retry below only helps for
+        connection-level failures that never reached GitHub's server. If the first
+        attempt succeeded at GitHub's side but the response was lost, the retry
+        will fail with a ``bad_verification_code`` error.
+        """
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+            # Exchange code → access_token (with retry for unstable networks)
             logger.info("GitHub OAuth: exchanging code for access token")
-            token_resp = await client.post(
-                "https://github.com/login/oauth/access_token",
-                json={
-                    "client_id": settings.github_client_id,
-                    "client_secret": settings.github_client_secret,
-                    "code": code,
-                    "state": state,
-                },
-                headers={"Accept": "application/json"},
-            )
-            token_resp.raise_for_status()
-            token_data = token_resp.json()
+            exchange_payload = {
+                "client_id": settings.github_client_id,
+                "client_secret": settings.github_client_secret,
+                "code": code,
+            }
+            # Only include state if non-null to avoid sending "state": null
+            if state is not None:
+                exchange_payload["state"] = state
+
+            token_data: dict[str, Any] = {}
+            for attempt in range(3):
+                try:
+                    token_resp = await client.post(
+                        "https://github.com/login/oauth/access_token",
+                        json=exchange_payload,
+                        headers={"Accept": "application/json"},
+                    )
+                    token_resp.raise_for_status()
+                    token_data = token_resp.json()
+                    break
+                except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError) as exc:
+                    logger.warning(
+                        "GitHub OAuth exchange attempt %d failed (network): %s",
+                        attempt + 1,
+                        exc,
+                    )
+                    if attempt == 2:
+                        raise
+                    await asyncio.sleep(0.5 * (attempt + 1))
+
             logger.info("GitHub OAuth: token response keys=%s", list(token_data.keys()))
 
             if "error" in token_data:
-                raise ValueError(f"GitHub OAuth error: {token_data['error']} — {token_data.get('error_description', '')}")
+                error_msg = token_data.get("error_description", token_data["error"])
+                logger.warning(
+                    "GitHub OAuth token error: %s — %s body=%s",
+                    token_data["error"],
+                    error_msg,
+                    token_data,
+                )
+                raise ValueError(f"GitHub OAuth error: {token_data['error']} — {error_msg}")
 
             access_token = token_data.get("access_token")
             if not access_token:

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser
@@ -14,6 +15,7 @@ from app.core.database import get_db
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.users import (
+    GitHubLoginResponseSchema,
     GitHubLoginSchema,
     TokenRefreshSchema,
     TokenSchema,
@@ -22,6 +24,7 @@ from app.schemas.users import (
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -41,7 +44,6 @@ async def dev_login() -> ApiResponse[TokenSchema]:
             detail="Dev login only available in development mode",
         )
 
-    auth = AuthService.__new__(AuthService)
     # Dev user gets ID=1 — get_current_user will synthesize a User for this ID
     access = AuthService.create_access_token(1, extra={
         "username": "dev_user",
@@ -55,30 +57,55 @@ async def dev_login() -> ApiResponse[TokenSchema]:
             access_token=access,
             refresh_token=refresh,
             token_type="bearer",
-            expires_in=900,
+            expires_in=settings.jwt_access_expire_minutes * 60,
         )
     )
 
 
 @router.post(
     "/github",
-    response_model=ApiResponse[TokenSchema],
+    response_model=ApiResponse[GitHubLoginResponseSchema],
     summary="Login with GitHub OAuth code",
 )
 async def github_login(
     payload: GitHubLoginSchema,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> ApiResponse[TokenSchema]:
-    """Exchange GitHub OAuth code for JWT tokens."""
+) -> ApiResponse[GitHubLoginResponseSchema]:
+    """Exchange GitHub OAuth code for JWT tokens + user profile."""
     service = AuthService(db)
     try:
-        tokens = await service.github_oauth_exchange(payload.code, payload.state)
-    except Exception as exc:
+        result = await service.github_oauth_exchange(payload.code, payload.state)
+    except ValueError as exc:
+        # GitHub returned an explicit error (bad code, expired, etc.)
+        logger.warning("GitHub OAuth exchange rejected: %s", exc)
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"GitHub OAuth failed: {exc}",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="GitHub authentication failed. Please try again.",
         ) from exc
-    return ApiResponse(data=tokens)
+    except Exception as exc:
+        logger.exception("GitHub OAuth exchange failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GitHub authentication failed. Please try again.",
+        ) from exc
+
+    user: User = result["user"]
+    access = AuthService.create_access_token(user.id, extra={
+        "username": user.username,
+        "email": user.email or "",
+        "is_admin": user.is_admin,
+    })
+    refresh = AuthService.create_refresh_token(user.id)
+
+    return ApiResponse(
+        data=GitHubLoginResponseSchema(
+            access_token=access,
+            refresh_token=refresh,
+            token_type="bearer",
+            expires_in=settings.jwt_access_expire_minutes * 60,
+            user=UserSchema.model_validate(user, from_attributes=True),
+        )
+    )
 
 
 @router.post(
@@ -91,12 +118,14 @@ async def refresh_token(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ApiResponse[TokenSchema]:
     service = AuthService(db)
-    user_id = service.decode_token(payload.refresh_token)
-    if user_id is None:
+    try:
+        token_payload = service.decode_token(payload.refresh_token)
+    except jwt.PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
+    user_id = int(token_payload["sub"])
     user = await service.get_user_by_id(user_id)
     if user is None or not user.is_active:
         raise HTTPException(
@@ -110,7 +139,7 @@ async def refresh_token(
             access_token=access,
             refresh_token=refresh,
             token_type="bearer",
-            expires_in=900,
+            expires_in=settings.jwt_access_expire_minutes * 60,
         )
     )
 

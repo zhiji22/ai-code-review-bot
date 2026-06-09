@@ -16,11 +16,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-/** Auto-refresh on 401 */
+/** Auto-refresh on 401 — but skip auth endpoints to avoid redirect loops */
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
     if (err.response?.status === 401 && !err.config._retry) {
+      // Don't auto-redirect for auth endpoints (login, refresh)
+      const url = err.config.url ?? "";
+      if (url.startsWith("/auth/")) {
+        return Promise.reject(err);
+      }
       err.config._retry = true;
       const refreshToken = localStorage.getItem("refresh_token");
       if (refreshToken) {
