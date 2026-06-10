@@ -18,6 +18,12 @@ services:
       backend:
         condition: service_healthy
 
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 64M
+
     networks:
       - review_net
 
@@ -54,10 +60,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "2.0"
-          memory: 512M
+          cpus: "1.0"
+          memory: 384M
         reservations:
-          memory: 256M
+          memory: 128M
     networks:
       - review_net
 
@@ -76,24 +82,24 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file: .env
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1 --max-tasks-per-child=50
     depends_on:
       redis:
         condition: service_healthy    # 等 redis 真正就绪
       postgres:
         condition: service_healthy    # 等 postgres 真正就绪
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping --timeout 5"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
+      interval: 60s
+      timeout: 15s
       retries: 3
     deploy:
       resources:
         limits:
-          cpus: "1.5"
-          memory: 512M
+          cpus: "1.0"
+          memory: 384M
         reservations:
-          memory: 256M
+          memory: 128M
     networks:
       - review_net
 
@@ -120,34 +126,16 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
-      interval: 30s
+      interval: 60s
       timeout: 10s
       retries: 3
     deploy:
       resources:
         limits:
-          memory: 256M
+          cpus: "0.25"
+          memory: 128M
     networks:
       - review_net
-
-  # ─────────────────────────────────────────────
-  # Flower (Celery monitoring) — uncomment to enable
-  # ─────────────────────────────────────────────
-  # flower:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.backend
-  #   restart: unless-stopped
-  #   env_file: .env
-  #   command: celery -A app.tasks.celery_app flower --port=5555
-  #     --basic-auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:?FLOWER_PASSWORD not set}
-  #   expose:
-  #     - "5555"
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - review_net
 
   # ─────────────────────────────────────────────
   # PostgreSQL + pgvector
@@ -159,23 +147,50 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-review_bot}
       POSTGRES_USER: ${POSTGRES_USER:-review}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 未设置，请在 .env 中配置}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=48MB
+      - -c
+      - effective_cache_size=128MB
+      - -c
+      - work_mem=2MB
+      - -c
+      - maintenance_work_mem=48MB
+      - -c
+      - max_connections=30
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - wal_buffers=4MB
+      - -c
+      - default_statistics_target=100
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=2
+      - -c
+      - huge_pages=off
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backups:/backups:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-review} -d ${POSTGRES_DB:-review_bot}"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
       retries: 5
     deploy:
       resources:
         limits:
-          memory: 512M
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 128M
     networks:
       - review_net
 
   # ─────────────────────────────────────────────
-  # Redis (4 logical DBs: cache/queue/rate-limit/idempotency)
+  # Redis (cache/queue/rate-limit/idempotency)
   # ─────────────────────────────────────────────
   redis:
     image: redis:7.2-alpine
@@ -183,57 +198,35 @@ services:
     command:
       - redis-server
       - --maxmemory
-      - 200mb
+      - 50mb
       - --maxmemory-policy
       - allkeys-lru
       - --appendonly
       - "yes"
       - --requirepass
-      - "${REDIS_PASSWORD}"
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD not set, configure in .env}"
+      - --save
+      - "60"
+      - "1"
+      - --save
+      - "300"
+      - "10"
     volumes:
       - redis_data:/data
     healthcheck:
       test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
       retries: 5
     deploy:
       resources:
         limits:
-          memory: 256M
+          cpus: "0.25"
+          memory: 128M
+        reservations:
+          memory: 64M
     networks:
       - review_net
-
-  # ─────────────────────────────────────────────
-  # Prometheus
-  # ─────────────────────────────────────────────
-  # prometheus:
-  #   image: prom/prometheus:v3.2.0
-  #   restart: unless-stopped
-  #   volumes:
-  #     - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-  #     - prometheus_data:/prometheus
-  #   expose:
-  #     - "9090"
-  #   networks:
-  #     - review_net
-
-  # ─────────────────────────────────────────────
-  # Grafana
-  # ─────────────────────────────────────────────
-  # grafana:
-  #   image: grafana/grafana:11.5.0
-  #   restart: unless-stopped
-  #   environment:
-  #     GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD 未设置，请在 .env 中配置}
-  #   volumes:
-  #     - grafana_data:/var/lib/grafana
-  #   expose:
-  #     - "3000"
-  #   depends_on:
-  #     - prometheus
-  #   networks:
-  #     - review_net
 
 volumes:
   postgres_data:
