@@ -84,7 +84,7 @@ class AuthService:
         attempt succeeded at GitHub's side but the response was lost, the retry
         will fail with a ``bad_verification_code`` error.
         """
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
             # Exchange code → access_token (with retry for unstable networks)
             logger.info("GitHub OAuth: exchanging code for access token")
             exchange_payload = {
@@ -115,7 +115,7 @@ class AuthService:
                     )
                     if attempt == 2:
                         raise
-                    await asyncio.sleep(0.5 * (attempt + 1))
+                    await asyncio.sleep(2.0 * (attempt + 1))
 
             logger.info("GitHub OAuth: token response keys=%s", list(token_data.keys()))
 

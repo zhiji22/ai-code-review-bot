@@ -10,7 +10,7 @@ import { Bot, Github } from "lucide-react";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const setAuth = useAuthStore((s) => s.setAuth);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,23 +25,20 @@ export default function LoginPage() {
     if (!oauthCode) return;
 
     // Prevent double-exchange of the same code (React StrictMode, re-renders, etc.)
-    // In StrictMode: Mount #1 sets ref + cleans URL → unmount → Mount #2 sees
-    // cleaned URL (no code param) and returns early. The ref guard is a safety net
-    // for non-StrictMode scenarios where re-renders preserve the URL parameter.
     if (oauthCode === lastCodeRef.current) return;
     lastCodeRef.current = oauthCode;
 
-    // Clean the URL immediately to prevent code re-use on page reload
-    setSearchParams({}, { replace: true });
+    // Clean the URL immediately to prevent code re-use on page reload.
+    // Use history.replaceState (NOT setSearchParams) to avoid triggering a React
+    // Router re-render that would cause this effect to re-run.
+    window.history.replaceState({}, "", window.location.pathname);
 
-    let cancelled = false;
     setLoading(true);
     setError(null);
 
     authApi
       .github(oauthCode)
       .then((result) => {
-        if (cancelled) return;
         setAuth(
           { access_token: result.access_token, refresh_token: result.refresh_token },
           result.user,
@@ -49,18 +46,18 @@ export default function LoginPage() {
         navigate("/", { replace: true });
       })
       .catch((err) => {
-        if (cancelled) return;
         if (import.meta.env.DEV) console.error("GitHub OAuth exchange failed:", err);
         setError("GitHub authentication failed. Please try again.");
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [searchParams, setAuth, navigate, setSearchParams]);
+    // No cleanup/cancel pattern: StrictMode double-mounts the component, and the
+    // cleanup would set cancelled=true, preventing .finally() from calling
+    // setLoading(false). lastCodeRef above prevents duplicate API calls. React 18
+    // safely ignores state updates on unmounted components.
+  }, [searchParams, setAuth, navigate]);
 
   const handleDevLogin = async () => {
     setLoading(true);
