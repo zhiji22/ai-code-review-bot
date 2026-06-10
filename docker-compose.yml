@@ -31,9 +31,9 @@ services:
     restart: unless-stopped
     environment:
       RUN_MIGRATIONS: "true"
-      HTTPS_PROXY: ${HTTPS_PROXY:-}
-      HTTP_PROXY: ${HTTP_PROXY:-}
-      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,redis,nginx}
+      # HTTPS_PROXY: ${HTTPS_PROXY:-}
+      # HTTP_PROXY: ${HTTP_PROXY:-}
+      # NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,redis,nginx}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file: .env
