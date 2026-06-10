@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     github_client_secret: str = Field(..., min_length=1)
     github_api_base_url: str = "https://api.github.com"
     github_webhook_max_payload_kb: int = 25000  # 25 MB
-    github_oauth_redirect_uri: str = "http://localhost:3000/auth/callback"
+    github_oauth_redirect_uri: str | None = None  # deprecated, not used
     github_token: str | None = None  # dev fallback when not using GitHub App auth
 
     # ── OpenAI / LLM ─────────────────────────────────────

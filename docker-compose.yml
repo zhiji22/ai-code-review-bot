@@ -29,6 +29,8 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     restart: unless-stopped
+    environment:
+      RUN_MIGRATIONS: "true"
     env_file: .env
     volumes:
       - ${GITHUB_APP_KEY_PATH:-./github-app-private-key.pem}:/app/private-key.pem:ro
