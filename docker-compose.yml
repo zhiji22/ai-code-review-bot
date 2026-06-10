@@ -47,7 +47,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      test: ["CMD-SHELL", "NO_PROXY=localhost,127.0.0.1 HTTP_PROXY='' HTTPS_PROXY='' curl -f http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
