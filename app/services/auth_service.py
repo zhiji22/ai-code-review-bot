@@ -88,7 +88,12 @@ class AuthService:
         """
         # Respect HTTPS_PROXY / HTTP_PROXY env vars for networks with restricted
         # outbound access (e.g. servers in mainland China reaching github.com).
-        proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+        proxy_url = (
+            os.environ.get("HTTPS_PROXY")
+            or os.environ.get("HTTP_PROXY")
+            or os.environ.get("https_proxy")
+            or os.environ.get("http_proxy")
+        )
         client_kwargs: dict[str, Any] = {"timeout": httpx.Timeout(30.0, connect=5.0)}
         if proxy_url:
             client_kwargs["proxy"] = proxy_url
