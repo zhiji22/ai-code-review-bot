@@ -47,6 +47,7 @@ class GitHubLoginSchema(BaseModel):
 
     code: str
     state: str | None = None
+    redirect_uri: str | None = None
 
 
 class GitHubLoginResponseSchema(BaseModel):

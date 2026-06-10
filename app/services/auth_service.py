@@ -76,6 +76,7 @@ class AuthService:
         self,
         code: str,
         state: str | None,
+        redirect_uri: str | None = None,
     ) -> GitHubOAuthResult:
         """Exchange GitHub OAuth code for access token + user info.
 
@@ -95,6 +96,10 @@ class AuthService:
             # Only include state if non-null to avoid sending "state": null
             if state is not None:
                 exchange_payload["state"] = state
+            # Include redirect_uri if provided — GitHub requires it to match
+            # the one used in the authorization request.
+            if redirect_uri is not None:
+                exchange_payload["redirect_uri"] = redirect_uri
 
             token_data: dict[str, Any] = {}
             for attempt in range(3):
