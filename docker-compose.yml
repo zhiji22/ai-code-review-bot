@@ -31,6 +31,8 @@ services:
     restart: unless-stopped
     environment:
       RUN_MIGRATIONS: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file: .env
     volumes:
       - ${GITHUB_APP_KEY_PATH:-./github-app-private-key.pem}:/app/private-key.pem:ro

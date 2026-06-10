@@ -40,19 +40,38 @@ export default function LoginPage() {
     setError(null);
 
     authApi
-      .github(oauthCode, OAUTH_REDIRECT_URI)
-      .then((result) => {
-        setAuth(
-          { access_token: result.access_token, refresh_token: result.refresh_token },
-          result.user,
-        );
-        navigate("/", { replace: true });
+    .github(oauthCode, OAUTH_REDIRECT_URI)
+    .then((result) => {
+      console.log("=== 1 github success ===");
+      console.log(result);
+
+      setAuth(
+        {
+          access_token: result.access_token,
+          refresh_token: result.refresh_token,
+        },
+        result.user,
+      );
+
+      console.log("=== 2 setAuth success ===");
+
+      console.log(
+        "access_token exists:",
+        !!localStorage.getItem("access_token")
+      );
+
+      navigate("/", { replace: true });
+
+      console.log("=== 3 navigate success ===");
       })
       .catch((err) => {
-        if (import.meta.env.DEV) console.error("GitHub OAuth exchange failed:", err);
+        console.error("=== 4 github error ===");
+        console.error(err);
+
         setError("GitHub authentication failed. Please try again.");
       })
       .finally(() => {
+        console.log("=== 5 finally ===");
         setLoading(false);
       });
 

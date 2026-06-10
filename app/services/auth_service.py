@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, TypedDict
 
@@ -85,7 +86,15 @@ class AuthService:
         attempt succeeded at GitHub's side but the response was lost, the retry
         will fail with a ``bad_verification_code`` error.
         """
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
+        # Respect HTTPS_PROXY / HTTP_PROXY env vars for networks with restricted
+        # outbound access (e.g. servers in mainland China reaching github.com).
+        proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+        client_kwargs: dict[str, Any] = {"timeout": httpx.Timeout(30.0, connect=5.0)}
+        if proxy_url:
+            client_kwargs["proxy"] = proxy_url
+            logger.debug("GitHub OAuth: using proxy %s", proxy_url)
+
+        async with httpx.AsyncClient(**client_kwargs) as client:
             # Exchange code → access_token (with retry for unstable networks)
             logger.info("GitHub OAuth: exchanging code for access token")
             exchange_payload = {
