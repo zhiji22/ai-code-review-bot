@@ -156,7 +156,7 @@ class AuthService:
             user_resp = await client.get(
                 "https://api.github.com/user",
                 headers={
-                    "Authorization": f"Bearer {access_token}",
+                    "Authorization": f"token {access_token}",
                     "Accept": "application/vnd.github+json",
                 },
             )
