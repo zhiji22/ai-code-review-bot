@@ -129,7 +129,7 @@ class ReviewEngine:
 
             if not code_files:
                 result.success = True
-                result.aggregated.summary = "No supported code files to review."
+                result.aggregated.summary = "没有支持的代码文件可供审查。"
                 result.pr_comment = self.formatter.format_pr_comment(
                     result.aggregated, repo_full_name, pr_number
                 )
@@ -380,9 +380,9 @@ class ReviewEngine:
             # Update commit status
             status = "success" if result.aggregated.critical_count == 0 else "failure"
             desc = (
-                f"Score: {result.aggregated.scores.overall}/100"
+                f"评分: {result.aggregated.scores.overall}/100"
                 if result.aggregated.total_issues == 0 or status == "success"
-                else f"{result.aggregated.critical_count} critical issue(s)"
+                else f"发现 {result.aggregated.critical_count} 个严重问题"
             )
             await client.update_review_status(
                 repo_full_name, commit_sha, status, description=desc

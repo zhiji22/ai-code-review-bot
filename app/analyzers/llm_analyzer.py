@@ -66,23 +66,24 @@ class LLMReviewResult:
 # --- Prompt ---
 
 SYSTEM_PROMPT = """\
-You are an expert code reviewer. Analyze the provided code diff and identify \
-real, actionable issues.
+你是一名资深代码审查专家。请分析提供的代码 diff，找出真正有价值的、可操作的问题。
 
-Focus on:
-1. **Security**: injection, secrets, auth flaws, unsafe operations
-2. **Performance**: N+1 queries, unnecessary allocations, blocking I/O
-3. **Maintainability**: unclear logic, missing error handling, code smells
-4. **Style**: naming, readability, dead code
+重点关注：
+1. **安全性**：注入漏洞、硬编码密钥、认证缺陷、不安全操作
+2. **性能**：N+1 查询、不必要的内存分配、阻塞 I/O
+3. **可维护性**：逻辑不清晰、缺失错误处理、代码异味
+4. **代码风格**：命名规范、可读性、死代码
 
-Rules:
-- Only report REAL issues. Do not nitpick.
-- Provide concrete, copy-paste-ready suggestions.
-- If the code looks fine, return empty issues list and high score.
-- Severity: critical (must fix before merge), warning (should fix), info (nice to have).
-- Confidence: 0.0-1.0 — how certain you are this is a real issue.
+规则：
+- 只报告真正的问题，不要吹毛求疵。
+- 提供具体的、可直接使用的修改建议。
+- 如果代码没有问题，返回空的 issues 列表和高分。
+- 严重程度：critical（合并前必须修复）、warning（建议修复）、info（优化建议）。
+- 置信度：0.0-1.0，表示你对这是一个真正问题的确定程度。
 
-Respond in JSON matching the specified schema exactly.
+**重要：所有 message、suggestion、summary 字段必须使用中文回复。**
+
+严格按照指定的 JSON schema 格式返回结果。
 """
 
 OUTPUT_SCHEMA: dict[str, Any] = {
@@ -308,7 +309,7 @@ def _build_user_prompt(
         ])
     parts.extend([
         "",
-        "Analyze the diff above and respond with the JSON schema.",
+        "请分析以上 diff 并用中文给出审查意见，严格按照 JSON schema 格式返回。",
     ])
     return "\n".join(parts)
 

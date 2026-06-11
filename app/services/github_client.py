@@ -259,7 +259,7 @@ class GitHubClient:
         repo_full_name: str,
         pr_sha: str,
         state: str,  # success, failure, pending, error
-        context: str = "AI Code Review",
+        context: str | None = None,
         description: str = "",
         target_url: str | None = None,
     ) -> dict[str, Any]:
@@ -267,7 +267,7 @@ class GitHubClient:
         client = await self._ensure_client()
         payload: dict[str, Any] = {
             "state": state,
-            "context": context,
+            "context": context or settings.github_status_context,
             "description": description[:140],  # GitHub limit
         }
         if target_url:
