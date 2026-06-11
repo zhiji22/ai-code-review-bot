@@ -106,112 +106,115 @@ async def _execute_review_pipeline(
     # Create authenticated GitHub client
     client = await get_github_client(installation_id=installation_id)
 
-    start = time.time()
-    engine = ReviewEngine()
-    result = await engine.review_pull_request(
-        repo_full_name=repo_full_name,
-        pr_number=pr_number,
-        commit_sha=commit_sha,
-        github_client=client,
-    )
-    duration_ms = int((time.time() - start) * 1000)
-
-    logger.info(
-        "review_pipeline_completed",
-        repo=repo_full_name,
-        pr_number=pr_number,
-        success=result.success,
-        issues=result.aggregated.total_issues,
-    )
-
-    # Extract PR info for persistence
-    pr_info = await client.get_pr_info(repo_full_name, pr_number)
-
-    # Persist to database
-    async with get_db_session() as session:
-        stmt = select(Repository).where(
-            Repository.full_name == repo_full_name
-        )
-        repo_result = await session.execute(stmt)
-        repo = repo_result.scalar_one_or_none()
-
-        if repo is None:
-            parts = repo_full_name.split("/")
-            repo = Repository(
-                github_repo_id=abs(hash(repo_full_name)) % (10**9),
-                full_name=repo_full_name,
-                owner=parts[0] if len(parts) == 2 else "",
-                name=parts[1] if len(parts) == 2 else repo_full_name,
-                installation_id=installation_id,
-            )
-            session.add(repo)
-            await session.flush()
-
-        service = ReviewService(session)
-        agg = result.aggregated
-
-        review = await service.create_from_pipeline(
-            repository_id=repo.id,
+    try:
+        start = time.time()
+        engine = ReviewEngine()
+        result = await engine.review_pull_request(
+            repo_full_name=repo_full_name,
             pr_number=pr_number,
             commit_sha=commit_sha,
-            pr_title=pr_info.title,
-            pr_author=pr_info.author,
-            trigger="webhook",
-            files_reviewed=agg.files_reviewed,
-            files_total=pr_info.changed_files,
-            lines_of_code=agg.lines_of_code,
-            overall_score=agg.scores.overall,
-            security_score=agg.scores.security,
-            performance_score=agg.scores.performance,
-            maintainability_score=agg.scores.maintainability,
-            critical_count=agg.critical_count,
-            warning_count=agg.warning_count,
-            info_count=agg.info_count,
-            llm_tokens_total=agg.llm_tokens,
-            llm_cost_usd=agg.llm_cost_usd,
-            duration_ms=duration_ms,
-            summary=agg.summary,
-            pr_comment_posted=bool(result.pr_comment),
-            inline_comments_posted=result.inline_comments_count,
+            github_client=client,
         )
-
-        # Save comments
-        comments_data = [
-            {
-                "file_path": issue.file_path,
-                "line_number": issue.line_number,
-                "line_end": issue.line_end,
-                "source": issue.source,
-                "category": issue.category,
-                "severity": issue.severity,
-                "message": issue.message,
-                "suggestion": issue.suggestion,
-                "rule_id": issue.rule_id,
-                "confidence": issue.confidence,
-            }
-            for issue in agg.issues
-        ]
-        if comments_data:
-            await service.save_comments(review.id, comments_data)
+        duration_ms = int((time.time() - start) * 1000)
 
         logger.info(
-            "review_persisted",
-            review_id=review.id,
+            "review_pipeline_completed",
             repo=repo_full_name,
             pr_number=pr_number,
+            success=result.success,
+            issues=result.aggregated.total_issues,
         )
 
-    return {
-        "success": result.success,
-        "repo_full_name": result.repo_full_name,
-        "pr_number": result.pr_number,
-        "commit_sha": result.commit_sha,
-        "error": result.error,
-        "overall_score": result.aggregated.scores.overall,
-        "total_issues": result.aggregated.total_issues,
-        "critical_count": result.aggregated.critical_count,
-        "inline_comments_count": result.inline_comments_count,
-    }
+        # Extract PR info for persistence
+        pr_info = await client.get_pr_info(repo_full_name, pr_number)
+
+        # Persist to database
+        async with get_db_session() as session:
+            stmt = select(Repository).where(
+                Repository.full_name == repo_full_name
+            )
+            repo_result = await session.execute(stmt)
+            repo = repo_result.scalar_one_or_none()
+
+            if repo is None:
+                parts = repo_full_name.split("/")
+                repo = Repository(
+                    github_repo_id=abs(hash(repo_full_name)) % (10**9),
+                    full_name=repo_full_name,
+                    owner=parts[0] if len(parts) == 2 else "",
+                    name=parts[1] if len(parts) == 2 else repo_full_name,
+                    installation_id=installation_id,
+                )
+                session.add(repo)
+                await session.flush()
+
+            service = ReviewService(session)
+            agg = result.aggregated
+
+            review = await service.create_from_pipeline(
+                repository_id=repo.id,
+                pr_number=pr_number,
+                commit_sha=commit_sha,
+                pr_title=pr_info.title,
+                pr_author=pr_info.author,
+                trigger="webhook",
+                files_reviewed=agg.files_reviewed,
+                files_total=pr_info.changed_files,
+                lines_of_code=agg.lines_of_code,
+                overall_score=agg.scores.overall,
+                security_score=agg.scores.security,
+                performance_score=agg.scores.performance,
+                maintainability_score=agg.scores.maintainability,
+                critical_count=agg.critical_count,
+                warning_count=agg.warning_count,
+                info_count=agg.info_count,
+                llm_tokens_total=agg.llm_tokens,
+                llm_cost_usd=agg.llm_cost_usd,
+                duration_ms=duration_ms,
+                summary=agg.summary,
+                pr_comment_posted=bool(result.pr_comment),
+                inline_comments_posted=result.inline_comments_count,
+            )
+
+            # Save comments
+            comments_data = [
+                {
+                    "file_path": issue.file_path,
+                    "line_number": issue.line_number,
+                    "line_end": issue.line_end,
+                    "source": issue.source,
+                    "category": issue.category,
+                    "severity": issue.severity,
+                    "message": issue.message,
+                    "suggestion": issue.suggestion,
+                    "rule_id": issue.rule_id,
+                    "confidence": issue.confidence,
+                }
+                for issue in agg.issues
+            ]
+            if comments_data:
+                await service.save_comments(review.id, comments_data)
+
+            logger.info(
+                "review_persisted",
+                review_id=review.id,
+                repo=repo_full_name,
+                pr_number=pr_number,
+            )
+
+        return {
+            "success": result.success,
+            "repo_full_name": result.repo_full_name,
+            "pr_number": result.pr_number,
+            "commit_sha": result.commit_sha,
+            "error": result.error,
+            "overall_score": result.aggregated.scores.overall,
+            "total_issues": result.aggregated.total_issues,
+            "critical_count": result.aggregated.critical_count,
+            "inline_comments_count": result.inline_comments_count,
+        }
+    finally:
+        await client.close()
 
 
 @celery_app.task(name="app.tasks.review_tasks.cleanup_expired_keys")

@@ -7,7 +7,7 @@ Per DESIGN.md §3 + §9: Celery with Redis broker, retry/timeout/backoff.
 from __future__ import annotations
 
 from celery import Celery
-from celery.signals import task_failure, task_success
+from celery.signals import task_failure, task_success, worker_process_init
 
 import structlog
 
@@ -77,3 +77,13 @@ def on_task_failure(sender, exception, **kwargs) -> None:
         task_id=sender.request.id,
         error=str(exception),
     )
+
+
+# Clear module-level caches after Celery prefork so each child starts fresh
+@worker_process_init.connect
+def _on_worker_process_init(**kwargs) -> None:
+    # Reset GitHub client module-level caches inherited from parent process
+    import app.services.github_client as gh_mod
+
+    gh_mod._cached_private_key = None
+    gh_mod._token_cache = {}

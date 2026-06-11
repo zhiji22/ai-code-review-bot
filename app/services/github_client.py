@@ -341,7 +341,10 @@ def _read_private_key() -> str:
     if _cached_private_key is None:
         key_path = Path(settings.github_app_private_key_path)
         if not key_path.exists():
-            raise FileNotFoundError("GitHub App private key not found")
+            raise FileNotFoundError(
+                f"GitHub App private key not found at: {key_path} "
+                f"(resolved from GITHUB_APP_PRIVATE_KEY_PATH={settings.github_app_private_key_path!r})"
+            )
         _cached_private_key = key_path.read_text()
     return _cached_private_key
 

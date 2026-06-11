@@ -82,6 +82,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file: .env
+    volumes:
+      - ${GITHUB_APP_KEY_PATH:-./github-app-private-key.pem}:/app/private-key.pem:ro
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1 --max-tasks-per-child=50
     depends_on:
       redis:
@@ -118,6 +120,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file: .env
+    volumes:
+      - ${GITHUB_APP_KEY_PATH:-./github-app-private-key.pem}:/app/private-key.pem:ro
     command: celery -A app.tasks.celery_app beat --loglevel=info
     depends_on:
       redis:
