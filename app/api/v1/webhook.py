@@ -57,7 +57,7 @@ async def receive_webhook(
     if x_github_event != "pull_request":
         logger.info(
             "webhook_ignored_event",
-            event=x_github_event,
+            github_event=x_github_event,
             delivery_id=x_github_delivery,
         )
         return {"status": "ignored", "event": x_github_event}
