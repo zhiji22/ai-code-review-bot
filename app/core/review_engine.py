@@ -56,6 +56,7 @@ class ReviewResult:
     pr_number: int
     commit_sha: str
     aggregated: AggregatedResult = field(default_factory=AggregatedResult)
+    file_reports: list[FileReport] = field(default_factory=list)
     pr_comment: str = ""
     inline_comments_count: int = 0
     success: bool = False
@@ -157,6 +158,7 @@ class ReviewEngine:
                 for fr in file_reports
             ]
             result.aggregated = self.aggregator.aggregate(file_result_dicts)
+            result.file_reports = file_reports  # Store for LLM usage tracking
 
             # 7. Format PR comment
             result.pr_comment = self.formatter.format_pr_comment(

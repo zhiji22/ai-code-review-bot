@@ -198,3 +198,50 @@ class TestResultAggregator:
         result = aggregator.aggregate(files)
         assert result.files_reviewed == 2
         assert result.lines_of_code == 300
+
+    def test_style_issues_affect_score(self, aggregator: ResultAggregator) -> None:
+        """Style category issues should lower the overall score."""
+        # Create many style info issues
+        violations = [
+            RuleViolation(
+                rule_id="STYLE001",
+                line_number=i,
+                line_end=i,
+                category=RuleCategory.STYLE,
+                severity=RuleSeverity.INFO,
+                message=f"Line too long {i}",
+                suggestion="Break into multiple lines",
+                matched_text="long line",
+            )
+            for i in range(1, 50)  # 49 style info issues
+        ]
+        file_result = self._make_file_result(rule_violations=violations, lines_of_code=100)
+        result = aggregator.aggregate([file_result])
+        # With 49 style info issues, score should be less than 100
+        assert result.info_count >= 49
+        assert result.scores.overall < 100.0, "Style issues should affect overall score"
+
+    def test_llm_cost_calculation(self, aggregator: ResultAggregator) -> None:
+        """LLM cost should be calculated from token usage."""
+        from app.analyzers.llm_analyzer import LLMReviewResult
+        from app.analyzers.result_aggregator import calculate_llm_cost
+
+        # Test cost calculation
+        cost = calculate_llm_cost("qwen-plus", prompt_tokens=1000, completion_tokens=500)
+        assert cost > 0, "Cost should be calculated"
+
+        # Test aggregation with LLM result
+        llm_result = LLMReviewResult(
+            issues=[],
+            summary="Test",
+            score=90,
+            model="qwen-plus",
+            prompt_tokens=1000,
+            completion_tokens=500,
+            total_tokens=1500,
+        )
+        file_result = self._make_file_result()
+        file_result["llm_result"] = llm_result
+        result = aggregator.aggregate([file_result])
+        assert result.llm_tokens == 1500
+        assert result.llm_cost_usd > 0, "LLM cost should be aggregated"

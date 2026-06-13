@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
+import structlog
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -26,7 +26,7 @@ from openai import (
 from app.core.config import settings
 from app.core.redis import get_redis
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # --- Models ---
 
@@ -143,7 +143,7 @@ async def _get_cached(key: str) -> dict[str, Any] | None:
         if data:
             return json.loads(data)  # type: ignore[no-any-return]
     except Exception as e:
-        logger.warning("cache_read_error", error=str(e))  # type: ignore[call-arg]
+        logger.warning("cache_read_error", error=str(e))
     return None
 
 
@@ -153,7 +153,7 @@ async def _set_cached(key: str, value: dict[str, Any], ttl: int = 86400) -> None
         redis = await get_redis()
         await redis.set(f"llm:{key}", json.dumps(value), ex=ttl)
     except Exception as e:
-        logger.warning("cache_write_error", error=str(e))  # type: ignore[call-arg]
+        logger.warning("cache_write_error", error=str(e))
 
 
 # --- Analyzer ---
@@ -216,7 +216,7 @@ class LLMAnalyzer:
             result = _parse_response(cached)
             result.cached = True
             result.model = cached.get("model", "")
-            logger.info("llm_cache_hit", file=file_path, key=cache_key[:16])  # type: ignore[call-arg]
+            logger.info("llm_cache_hit", file=file_path, key=cache_key[:16])
             return result
 
         # 2. Build prompt
@@ -261,7 +261,7 @@ class LLMAnalyzer:
             result.completion_tokens = data["completion_tokens"]
             result.total_tokens = data["total_tokens"]
 
-            logger.info(  # type: ignore[call-arg]
+            logger.info(
                 "llm_analyze_success",
                 file=file_path,
                 model=model,
@@ -271,16 +271,16 @@ class LLMAnalyzer:
             return result
 
         except RateLimitError as e:
-            logger.warning("llm_rate_limited", file=file_path, error=str(e))  # type: ignore[call-arg]
+            logger.warning("llm_rate_limited", file=file_path, error=str(e))
             return LLMReviewResult.empty("OpenAI rate limit exceeded")
         except APITimeoutError as e:
-            logger.warning("llm_timeout", file=file_path, error=str(e))  # type: ignore[call-arg]
+            logger.warning("llm_timeout", file=file_path, error=str(e))
             return LLMReviewResult.empty("OpenAI request timed out")
         except (APIError, json.JSONDecodeError) as e:
-            logger.error("llm_api_error", file=file_path, error=str(e))  # type: ignore[call-arg]
+            logger.error("llm_api_error", file=file_path, error=str(e))
             return LLMReviewResult.empty(f"LLM API error: {e!s}")
         except Exception as e:
-            logger.error("llm_unexpected_error", file=file_path, error=str(e))  # type: ignore[call-arg]
+            logger.error("llm_unexpected_error", file=file_path, error=str(e))
             return LLMReviewResult.empty(f"Unexpected error: {e!s}")
 
 
