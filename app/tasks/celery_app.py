@@ -6,10 +6,11 @@ Per DESIGN.md §3 + §9: Celery with Redis broker, retry/timeout/backoff.
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 from celery import Celery
 from celery.signals import task_failure, task_success, worker_process_init
-from typing import Any
 
 from app.core.config import get_settings
 
