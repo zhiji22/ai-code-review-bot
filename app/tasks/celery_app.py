@@ -60,8 +60,8 @@ celery_app.conf.update(
     },
 )
 
-# Auto-discover tasks
-celery_app.autodiscover_tasks(["app.tasks"])
+# Auto-discover tasks (related_name="review_tasks" matches app/tasks/review_tasks.py)
+celery_app.autodiscover_tasks(["app.tasks"], related_name="review_tasks")
 
 
 @task_success.connect  # type: ignore[misc]

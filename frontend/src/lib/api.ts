@@ -202,8 +202,11 @@ export interface User {
 export const authApi = {
   devLogin: async () =>
     (await api.post<ApiResponse<{ access_token: string; refresh_token: string; user: User }>>("/auth/dev-login")).data.data,
-  github: async (code: string) =>
-    (await api.post<ApiResponse<{ access_token: string; refresh_token: string; user: User }>>("/auth/github", { code })).data.data,
+  github: async (code: string, redirectUri?: string) =>
+    (await api.post<ApiResponse<{ access_token: string; refresh_token: string; user: User }>>("/auth/github", {
+      code,
+      redirect_uri: redirectUri,
+    })).data.data,
   refresh: async (refresh_token: string) =>
     (await api.post<ApiResponse<{ access_token: string; refresh_token: string }>>("/auth/refresh", { refresh_token })).data.data,
   me: async () => (await api.get<ApiResponse<User>>("/auth/me")).data.data,

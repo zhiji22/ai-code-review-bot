@@ -8,6 +8,9 @@ import { authApi } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import { Bot, Github } from "lucide-react";
 
+/** Consistent redirect URI for GitHub OAuth — must match in authorize + exchange steps. */
+const OAUTH_REDIRECT_URI = window.location.origin + "/login";
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -37,19 +40,38 @@ export default function LoginPage() {
     setError(null);
 
     authApi
-      .github(oauthCode)
-      .then((result) => {
-        setAuth(
-          { access_token: result.access_token, refresh_token: result.refresh_token },
-          result.user,
-        );
-        navigate("/", { replace: true });
+    .github(oauthCode, OAUTH_REDIRECT_URI)
+    .then((result) => {
+      console.log("=== 1 github success ===");
+      console.log(result);
+
+      setAuth(
+        {
+          access_token: result.access_token,
+          refresh_token: result.refresh_token,
+        },
+        result.user,
+      );
+
+      console.log("=== 2 setAuth success ===");
+
+      console.log(
+        "access_token exists:",
+        !!localStorage.getItem("access_token")
+      );
+
+      navigate("/", { replace: true });
+
+      console.log("=== 3 navigate success ===");
       })
       .catch((err) => {
-        if (import.meta.env.DEV) console.error("GitHub OAuth exchange failed:", err);
+        console.error("=== 4 github error ===");
+        console.error(err);
+
         setError("GitHub authentication failed. Please try again.");
       })
       .finally(() => {
+        console.log("=== 5 finally ===");
         setLoading(false);
       });
 
@@ -89,8 +111,12 @@ export default function LoginPage() {
       setError("VITE_GITHUB_CLIENT_ID not configured. Use Dev Login instead.");
       return;
     }
-    const redirectUri = window.location.origin + "/login";
-    window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=repo,user:email`;
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: OAUTH_REDIRECT_URI,
+      scope: "repo,user:email",
+    });
+    window.location.href = `https://github.com/login/oauth/authorize?${params.toString()}`;
   };
 
   const handleCodeSubmit = async (e: React.FormEvent) => {
@@ -99,7 +125,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await authApi.github(code.trim());
+      const result = await authApi.github(code.trim(), OAUTH_REDIRECT_URI);
       setAuth(
         { access_token: result.access_token, refresh_token: result.refresh_token },
         result.user,

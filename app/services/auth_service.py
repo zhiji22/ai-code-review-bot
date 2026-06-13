@@ -79,6 +79,7 @@ class AuthService:
         self,
         code: str,
         state: str | None,
+        redirect_uri: str | None = None,
     ) -> GitHubOAuthResult:
         """Exchange GitHub OAuth code for access token + user info.
 
@@ -87,7 +88,20 @@ class AuthService:
         attempt succeeded at GitHub's side but the response was lost, the retry
         will fail with a ``bad_verification_code`` error.
         """
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
+        # Respect HTTPS_PROXY / HTTP_PROXY env vars for networks with restricted
+        # outbound access (e.g. servers in mainland China reaching github.com).
+        proxy_url = (
+            os.environ.get("HTTPS_PROXY")
+            or os.environ.get("HTTP_PROXY")
+            or os.environ.get("https_proxy")
+            or os.environ.get("http_proxy")
+        )
+        client_kwargs: dict[str, Any] = {"timeout": httpx.Timeout(30.0, connect=5.0)}
+        if proxy_url:
+            client_kwargs["proxy"] = proxy_url
+            logger.debug("GitHub OAuth: using proxy %s", proxy_url)
+
+        async with httpx.AsyncClient(**client_kwargs) as client:
             # Exchange code → access_token (with retry for unstable networks)
             logger.info("GitHub OAuth: exchanging code for access token")
             exchange_payload = {
@@ -98,6 +112,10 @@ class AuthService:
             # Only include state if non-null to avoid sending "state": null
             if state is not None:
                 exchange_payload["state"] = state
+            # Include redirect_uri if provided — GitHub requires it to match
+            # the one used in the authorization request.
+            if redirect_uri is not None:
+                exchange_payload["redirect_uri"] = redirect_uri
 
             token_data: dict[str, Any] = {}
             for attempt in range(3):
@@ -140,7 +158,7 @@ class AuthService:
             user_resp = await client.get(
                 "https://api.github.com/user",
                 headers={
-                    "Authorization": f"Bearer {access_token}",
+                    "Authorization": f"token {access_token}",
                     "Accept": "application/vnd.github+json",
                 },
             )

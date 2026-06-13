@@ -77,7 +77,11 @@ async def github_login(
     """Exchange GitHub OAuth code for JWT tokens + user profile."""
     service = AuthService(db)
     try:
-        result = await service.github_oauth_exchange(payload.code, payload.state)
+        result = await service.github_oauth_exchange(
+            payload.code,
+            state=payload.state,
+            redirect_uri=payload.redirect_uri,
+        )
     except ValueError as exc:
         # GitHub returned an explicit error (bad code, expired, etc.)
         logger.warning("GitHub OAuth exchange rejected: %s", exc)

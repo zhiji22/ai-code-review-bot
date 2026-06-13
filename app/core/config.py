@@ -122,6 +122,9 @@ class Settings(BaseSettings):
     celery_worker_prefetch_multiplier: int = 1
     celery_task_acks_late: bool = True
 
+    # ── GitHub Status Check ─────────────────────────────
+    github_status_context: str = "AI Code Review"
+
     # ── Review Pipeline ──────────────────────────────────
     review_max_file_size_kb: int = 500  # skip files larger than 500 KB
     review_max_files_per_pr: int = 100

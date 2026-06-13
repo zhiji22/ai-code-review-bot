@@ -7,6 +7,7 @@ Uses httpx for async operations with GitHub App authentication.
 from __future__ import annotations
 
 import base64
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -78,6 +79,37 @@ class PRInfo:
     changed_files: int
 
 
+def _get_proxy_url() -> str | None:
+    """Return the proxy URL from environment variables, if configured.
+
+    Supports HTTPS_PROXY, HTTP_PROXY (lowercase variants also checked).
+    NO_PROXY is handled by httpx at the transport level.
+    """
+    return (
+        os.environ.get("HTTPS_PROXY")
+        or os.environ.get("HTTP_PROXY")
+        or os.environ.get("https_proxy")
+        or os.environ.get("http_proxy")
+    )
+
+
+def _build_github_client(
+    headers: dict[str, str] | None = None,
+    timeout: float = 30.0,
+) -> httpx.AsyncClient:
+    """Build an httpx client pre-configured for the GitHub API with proxy support."""
+    kwargs: dict[str, Any] = {
+        "base_url": "https://api.github.com",
+        "headers": headers or {},
+        "timeout": timeout,
+    }
+    proxy_url = _get_proxy_url()
+    if proxy_url:
+        kwargs["proxy"] = proxy_url
+        logger.debug("github_client_using_proxy", proxy=proxy_url)
+    return httpx.AsyncClient(**kwargs)
+
+
 class GitHubClient:
     """Async-compatible GitHub API client.
 
@@ -102,11 +134,7 @@ class GitHubClient:
             }
             if self._token:
                 headers["Authorization"] = f"token {self._token}"
-            self._http = httpx.AsyncClient(
-                base_url="https://api.github.com",
-                headers=headers,
-                timeout=30.0,
-            )
+            self._http = _build_github_client(headers=headers)
         return self._http
 
     async def get_pr_info(self, repo_full_name: str, pr_number: int) -> PRInfo:
@@ -222,7 +250,7 @@ class GitHubClient:
         repo_full_name: str,
         pr_sha: str,
         state: str,  # success, failure, pending, error
-        context: str = "AI Code Review",
+        context: str | None = None,
         description: str = "",
         target_url: str | None = None,
     ) -> dict[str, Any]:
@@ -230,7 +258,7 @@ class GitHubClient:
         client = await self._ensure_client()
         payload: dict[str, Any] = {
             "state": state,
-            "context": context,
+            "context": context or settings.github_status_context,
             "description": description[:140],  # GitHub limit
         }
         if target_url:
@@ -304,7 +332,10 @@ def _read_private_key() -> str:
     if _cached_private_key is None:
         key_path = Path(settings.github_app_private_key_path)
         if not key_path.exists():
-            raise FileNotFoundError("GitHub App private key not found")
+            raise FileNotFoundError(
+                f"GitHub App private key not found at: {key_path} "
+                f"(resolved from GITHUB_APP_PRIVATE_KEY_PATH={settings.github_app_private_key_path!r})"
+            )
         _cached_private_key = key_path.read_text()
     return _cached_private_key
 
@@ -327,10 +358,8 @@ async def _get_installation_token(installation_id: int) -> str:
         return cached[0]
 
     app_jwt = _generate_jwt()
-    async with httpx.AsyncClient(
-        base_url="https://api.github.com",
+    async with _build_github_client(
         headers={**_APP_HEADERS, "Authorization": f"Bearer {app_jwt}"},
-        timeout=30.0,
     ) as client:
         resp = await client.post(f"/app/installations/{installation_id}/access_tokens")
         resp.raise_for_status()
@@ -343,10 +372,8 @@ async def _get_installation_token(installation_id: int) -> str:
 async def _list_installations() -> list[dict[str, Any]]:
     """List all installations of the GitHub App."""
     app_jwt = _generate_jwt()
-    async with httpx.AsyncClient(
-        base_url="https://api.github.com",
+    async with _build_github_client(
         headers={**_APP_HEADERS, "Authorization": f"Bearer {app_jwt}"},
-        timeout=30.0,
     ) as client:
         resp = await client.get("/app/installations")
         resp.raise_for_status()

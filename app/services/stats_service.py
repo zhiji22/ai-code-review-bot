@@ -50,24 +50,27 @@ class StatsService:
             await self.session.scalar(select(func.count()).select_from(base.subquery())) or 0
         )
 
-        # Average scores
+        # Average scores — use subquery columns to avoid cartesian product
+        subq = base.subquery()
         score_row = await self.session.execute(
             select(
-                func.avg(Review.overall_score).label("avg_overall"),
-                func.avg(Review.security_score).label("avg_security"),
-                func.avg(Review.performance_score).label("avg_performance"),
-                func.avg(Review.maintainability_score).label("avg_maintainability"),
-            ).select_from(base.subquery())
+                func.avg(subq.c.overall_score).label("avg_overall"),
+                func.avg(subq.c.security_score).label("avg_security"),
+                func.avg(subq.c.performance_score).label("avg_performance"),
+                func.avg(subq.c.maintainability_score).label("avg_maintainability"),
+            )
+            .select_from(subq)
         )
         scores = score_row.one_or_none()
 
-        # Issue counts
+        # Issue counts — reuse the same subquery
         issue_row = await self.session.execute(
             select(
-                func.sum(Review.critical_count).label("critical"),
-                func.sum(Review.warning_count).label("warning"),
-                func.sum(Review.info_count).label("info"),
-            ).select_from(base.subquery())
+                func.sum(subq.c.critical_count).label("critical"),
+                func.sum(subq.c.warning_count).label("warning"),
+                func.sum(subq.c.info_count).label("info"),
+            )
+            .select_from(subq)
         )
         issues = issue_row.one_or_none()
 
