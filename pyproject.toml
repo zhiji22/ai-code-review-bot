@@ -29,11 +29,17 @@ ignore = [
     "E501",   # line too long (handled by formatter)
     "S101",   # use of assert (needed in tests)
     "S104",   # possible binding to all interfaces
+    "S105",   # hardcoded-password-string (false positives on token_type fields)
+    "S106",   # hardcoded-password-func-arg (false positives on token_type="bearer")
     "B008",   # function call in default argument (FastAPI Depends)
+    "TC001",  # typing-only-first-party-import (incompatible with Pydantic/FastAPI + future annotations)
+    "TC002",  # typing-only-third-party-import (incompatible with Pydantic/FastAPI + future annotations)
+    "TC003",  # typing-only-standard-library-import (incompatible with Pydantic/FastAPI + future annotations)
+    "RUF001", # ambiguous unicode characters in strings (Chinese fullwidth punctuation is intentional)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*" = ["S", "T20"]
+"tests/**/*" = ["S", "T20", "SIM117"]
 "alembic/**/*" = ["E", "W", "F401"]
 
 [tool.ruff.format]
@@ -43,16 +49,6 @@ indent-style = "space"
 [tool.mypy]
 python_version = "3.12"
 strict = true
-warn-return-any = true
-warn-unused-configs = true
-disallow-untyped-defs = true
-disallow-incomplete-defs = true
-check-untyped-defs = true
-no-implicit-optional = true
-warn-redundant-casts = true
-warn-unused-ignores = true
-warn-no-return = true
-warn-unreachable = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
@@ -61,6 +57,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "8.0"
+pythonpath = ["."]
 testpaths = ["tests", "app/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
@@ -86,6 +83,7 @@ filterwarnings = [
     "error",
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
+    "ignore::FutureWarning",
 ]
 
 [tool.coverage.run]

@@ -9,21 +9,27 @@ from __future__ import annotations
 
 import asyncio
 import os
-from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
 # Set test environment before importing app
-os.environ.setdefault("ENVIRONMENT", "test")
-os.environ.setdefault("APP_SECRET", "test-secret-key-for-testing-only-32chars!")
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://review:review@localhost:5432/review_test")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6379/1")
-os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/2")
+os.environ.setdefault("APP_ENV", "development")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only-32chars!")
+os.environ.setdefault("DB_PASSWORD", "test")
+os.environ.setdefault("DB_NAME", "code_review_test")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-fake-key")
-os.environ.setdefault("GITHUB_TOKEN", "ghp_test_token")
+os.environ.setdefault("GITHUB_APP_ID", "test-app-id")
+os.environ.setdefault("GITHUB_APP_PRIVATE_KEY_PATH", "dummy")
+os.environ.setdefault("GITHUB_WEBHOOK_SECRET", "test-webhook-secret-min-1char")
+os.environ.setdefault("GITHUB_CLIENT_ID", "test-client-id")
+os.environ.setdefault("GITHUB_CLIENT_SECRET", "test-client-secret")
 
 
 @pytest.fixture(scope="session")
@@ -36,12 +42,25 @@ def event_loop():
 
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
-    """Async HTTP client for API testing."""
+    """Async HTTP client for API testing with mocked DB."""
+    from app.core.database import get_db
     from app.main import app
 
-    transport = ASGITransport(app=app)
+    # Override get_db to avoid real DB connections
+    mock_db = AsyncMock()
+    app.dependency_overrides[get_db] = lambda: _mock_db_generator(mock_db)
+
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+    # Clean up overrides after test
+    app.dependency_overrides.clear()
+
+
+async def _mock_db_generator(mock_db: AsyncMock):
+    """Yield a mock DB session (matches get_db async generator signature)."""
+    yield mock_db
 
 
 @pytest.fixture
@@ -71,7 +90,7 @@ eval("1+1")
 @pytest.fixture
 def sample_js_code() -> str:
     """Sample JavaScript code with known issues."""
-    return '''const password = "hardcoded_secret";
+    return """const password = "hardcoded_secret";
 
 function fetchData(url) {
     const xhr = new XMLHttpRequest();
@@ -81,7 +100,7 @@ function fetchData(url) {
 }
 
 element.innerHTML = userInput; // XSS
-'''
+"""
 
 
 @pytest.fixture

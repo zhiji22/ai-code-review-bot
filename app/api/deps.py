@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Annotated, Any
 
@@ -20,7 +20,7 @@ settings = get_settings()
 
 def _make_dev_user(user_id: int = 1) -> Any:
     """Create a lightweight dev user object (duck-typed, no SQLAlchemy needed)."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return SimpleNamespace(
         id=user_id,
         github_id=999_999,
@@ -61,12 +61,12 @@ async def get_current_user(
 
     try:
         payload = auth_service.decode_token(token)
-    except jwt.PyJWTError:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from exc
 
     user_id = int(payload.get("sub", 0))
 

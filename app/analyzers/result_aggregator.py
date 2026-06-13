@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.analyzers.ast_analyzer import ASTIssue, ASTReport
-from app.analyzers.llm_analyzer import LLMIssue, LLMReviewResult
-from app.analyzers.rule_engine import RuleViolation
+from app.analyzers.ast_analyzer import ASTReport
+from app.analyzers.llm_analyzer import LLMReviewResult
+
+if TYPE_CHECKING:
+    from app.analyzers.rule_engine import RuleViolation
 
 logger = logging.getLogger(__name__)
 
@@ -131,54 +133,71 @@ class ResultAggregator:
 
         for fr in file_results:
             file_path = fr.get("file_path", "")
-            ast_report: ASTReport = fr.get("ast_report", ASTReport.empty())
-            rule_violations: list[RuleViolation] = fr.get("rule_violations", [])
-            llm_result: LLMReviewResult = fr.get("llm_result", LLMReviewResult.empty())
-            loc = fr.get("lines_of_code", 0)
+            ast_report_raw = fr.get("ast_report")
+            ast_report: ASTReport = (
+                ast_report_raw if isinstance(ast_report_raw, ASTReport) else ASTReport.empty()
+            )
+            rule_violations_raw = fr.get("rule_violations", [])
+            rule_violations: list[RuleViolation] = (
+                rule_violations_raw if isinstance(rule_violations_raw, list) else []
+            )
+            llm_result_raw = fr.get("llm_result")
+            llm_result: LLMReviewResult = (
+                llm_result_raw
+                if isinstance(llm_result_raw, LLMReviewResult)
+                else LLMReviewResult.empty()
+            )
+            loc: int = fr.get("lines_of_code", 0)
             total_loc += loc
 
             # Convert AST issues
             for issue in ast_report.issues:
-                all_issues.append(UnifiedIssue(
-                    file_path=file_path,
-                    line_number=issue.line_number,
-                    source="ast",
-                    category=issue.category,
-                    severity=issue.severity,
-                    message=issue.message,
-                    line_end=issue.line_end,
-                    suggestion=issue.suggestion,
-                    confidence=issue.confidence,
-                ))
+                all_issues.append(
+                    UnifiedIssue(
+                        file_path=file_path,
+                        line_number=issue.line_number,
+                        source="ast",
+                        category=issue.category,
+                        severity=issue.severity,
+                        message=issue.message,
+                        line_end=issue.line_end,
+                        suggestion=issue.suggestion,
+                        confidence=issue.confidence,
+                    )
+                )
 
             # Convert rule violations
             for violation in rule_violations:
-                all_issues.append(UnifiedIssue(
-                    file_path=file_path,
-                    line_number=violation.line_number,
-                    source="rule",
-                    category=violation.category,
-                    severity=violation.severity,
-                    message=violation.message,
-                    line_end=violation.line_end,
-                    suggestion=violation.suggestion,
-                    rule_id=violation.rule_id,
-                    confidence=1.0,
-                ))
+                all_issues.append(
+                    UnifiedIssue(
+                        file_path=file_path,
+                        line_number=violation.line_number,
+                        source="rule",
+                        category=violation.category,
+                        severity=violation.severity,
+                        message=violation.message,
+                        line_end=violation.line_end,
+                        suggestion=violation.suggestion,
+                        rule_id=violation.rule_id,
+                        confidence=1.0,
+                    )
+                )
 
             # Convert LLM issues
-            for issue in llm_result.issues:
-                all_issues.append(UnifiedIssue(
-                    file_path=file_path,
-                    line_number=issue.line_number,
-                    source="llm",
-                    category=issue.category,
-                    severity=issue.severity,
-                    message=issue.message,
-                    line_end=issue.line_end,
-                    suggestion=issue.suggestion,
-                    confidence=issue.confidence,
-                ))
+            for llm_issue in llm_result.issues:
+                all_issues.append(
+                    UnifiedIssue(
+                        file_path=file_path,
+                        line_number=llm_issue.line_number,
+                        source="llm",
+                        category=llm_issue.category,
+                        severity=llm_issue.severity,
+                        message=llm_issue.message,
+                        line_end=llm_issue.line_end,
+                        suggestion=llm_issue.suggestion,
+                        confidence=llm_issue.confidence,
+                    )
+                )
 
             if llm_result.summary:
                 llm_summary_parts.append(f"**{file_path}**: {llm_result.summary}")
@@ -224,14 +243,9 @@ def _deduplicate(issues: list[UnifiedIssue]) -> list[UnifiedIssue]:
         else:
             existing = seen[key]
             # Prefer higher severity, then higher-confidence source
-            if severity_order.get(issue.severity, 3) < severity_order.get(
-                existing.severity, 3
-            ):
-                seen[key] = issue
-            elif (
+            if severity_order.get(issue.severity, 3) < severity_order.get(existing.severity, 3) or (
                 issue.severity == existing.severity
-                and source_priority.get(issue.source, 3)
-                < source_priority.get(existing.source, 3)
+                and source_priority.get(issue.source, 3) < source_priority.get(existing.source, 3)
             ):
                 seen[key] = issue
 
@@ -253,7 +267,11 @@ def calculate_score(
     base = 100
     loc_factor = max(lines_of_code / 100, 1)
 
-    categories = {"security": [], "performance": [], "maintainability": []}
+    categories: dict[str, list[UnifiedIssue]] = {
+        "security": [],
+        "performance": [],
+        "maintainability": [],
+    }
 
     for issue in issues:
         if issue.category in categories:

@@ -6,11 +6,16 @@ Rule service — CRUD for custom and builtin rules.
 
 from __future__ import annotations
 
-from sqlalchemy import select, update, delete, func, and_
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import TYPE_CHECKING, Any
+
+from sqlalchemy import and_, delete, func, select, update
 
 from app.models.rule import Rule
-from app.schemas.rules import RuleCreateSchema, RuleUpdateSchema
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.schemas.rules import RuleCreateSchema, RuleUpdateSchema
 
 
 class RuleService:
@@ -43,16 +48,12 @@ class RuleService:
 
     # ------------------------------------------------------------------ read
     async def get_by_id(self, rule_id: int) -> Rule | None:
-        result = await self.session.execute(
-            select(Rule).where(Rule.id == rule_id)
-        )
+        result = await self.session.execute(select(Rule).where(Rule.id == rule_id))
         return result.scalar_one_or_none()
 
     async def get_by_rule_id(self, rule_id: str) -> Rule | None:
         """Get rule by string rule_id (e.g. 'SEC001')."""
-        result = await self.session.execute(
-            select(Rule).where(Rule.rule_id == rule_id)
-        )
+        result = await self.session.execute(select(Rule).where(Rule.rule_id == rule_id))
         return result.scalar_one_or_none()
 
     async def list_rules(
@@ -68,12 +69,11 @@ class RuleService:
     ) -> tuple[list[Rule], int]:
         """List rules with optional filters."""
         stmt = select(Rule)
-        conditions = []
+        conditions: list[Any] = []
         if repository_id is not None:
             # Include both repo-specific and global/builtin rules
             conditions.append(
-                (Rule.repository_id == repository_id)
-                | (Rule.repository_id.is_(None))
+                (Rule.repository_id == repository_id) | (Rule.repository_id.is_(None))
             )
         if category:
             conditions.append(Rule.category == category)
@@ -87,9 +87,7 @@ class RuleService:
         if conditions:
             stmt = stmt.where(and_(*conditions))
 
-        total = await self.session.scalar(
-            select(func.count()).select_from(stmt.subquery())
-        )
+        total = await self.session.scalar(select(func.count()).select_from(stmt.subquery()))
         result = await self.session.execute(
             stmt.order_by(Rule.category, Rule.rule_id).offset(offset).limit(limit)
         )
@@ -103,8 +101,7 @@ class RuleService:
     ) -> list[Rule]:
         """Get all rules applicable to a repository (builtin + repo-specific)."""
         stmt = select(Rule).where(
-            (Rule.repository_id == repository_id)
-            | (Rule.repository_id.is_(None))
+            (Rule.repository_id == repository_id) | (Rule.repository_id.is_(None))
         )
         if enabled_only:
             stmt = stmt.where(Rule.enabled.is_(True))
@@ -120,17 +117,13 @@ class RuleService:
         values = data.model_dump(exclude_unset=True)
         if not values:
             return await self.get_by_id(rule_id)
-        await self.session.execute(
-            update(Rule).where(Rule.id == rule_id).values(**values)
-        )
+        await self.session.execute(update(Rule).where(Rule.id == rule_id).values(**values))
         await self.session.commit()
         return await self.get_by_id(rule_id)
 
     async def toggle(self, rule_id: int, enabled: bool) -> Rule | None:
         """Enable/disable a rule."""
-        await self.session.execute(
-            update(Rule).where(Rule.id == rule_id).values(enabled=enabled)
-        )
+        await self.session.execute(update(Rule).where(Rule.id == rule_id).values(enabled=enabled))
         await self.session.commit()
         return await self.get_by_id(rule_id)
 

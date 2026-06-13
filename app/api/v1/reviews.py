@@ -118,16 +118,16 @@ async def trigger_review(
     review = await service.create_pending(
         repository_id=payload.repository_id,
         pr_number=payload.pr_number,
-        commit_sha=payload.commit_sha,
+        commit_sha=payload.commit_sha or "",
         pr_title=payload.pr_title or "",
         pr_author=payload.pr_author or "",
     )
     # TODO: queue Celery task for actual review
     from app.tasks.review_tasks import queue_pr_review
 
-    queue_pr_review.delay(  # type: ignore[attr-defined]
+    queue_pr_review.delay(
         repo_full_name=payload.repository_full_name,
         pr_number=payload.pr_number,
-        commit_sha=payload.commit_sha,
+        commit_sha=payload.commit_sha or "",
     )
     return ApiResponse(data=review)

@@ -1,4 +1,7 @@
 """LLM usage tracking model — token and cost accounting per request."""
+
+from typing import Any
+
 from sqlalchemy import BigInteger, Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -32,7 +35,7 @@ class LLMUsage(Base, IdMixin, TimestampMixin):
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     success: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    request_meta: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    request_meta: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     def __repr__(self) -> str:
         return (

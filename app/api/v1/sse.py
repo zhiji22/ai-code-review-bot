@@ -9,27 +9,26 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
-from typing import AsyncIterator
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser
-from app.core.database import get_db
-from app.core.redis import get_redis
 from app.models.review import Review
-from app.schemas.common import ApiResponse
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/reviews", tags=["reviews-sse"])
 
 
-async def _review_status_event(
-    review_id: int, db_session
-) -> dict | None:
+async def _review_status_event(review_id: int, db_session: AsyncSession) -> dict[str, Any] | None:
     """Fetch current review status from DB."""
     result = await db_session.execute(
         select(
@@ -58,30 +57,27 @@ async def _review_status_event(
         "warning_count": row.warning_count,
         "info_count": row.info_count,
         "error_message": row.error_message,
-        "reviewed_at": row.reviewed_at.isoformat()
-        if row.reviewed_at
-        else None,
+        "reviewed_at": row.reviewed_at.isoformat() if row.reviewed_at else None,
     }
 
 
-async def _subscribe_review_stream(
-    review_id: int, request: Request
-) -> AsyncIterator[bytes]:
+async def _subscribe_review_stream(review_id: int, request: Request) -> AsyncIterator[bytes]:
     """Generate SSE events for a review until terminal state or disconnect.
 
     Polls DB every 1.5s for status changes. Uses Redis pubsub as optional
     fast-path when review tasks publish updates.
     """
-    from app.core.database import async_session_factory
+    from app.core.database import get_session_factory
 
     poll_interval = 1.5  # seconds
-    terminal_states = {"completed", "failed", "cancelled"}
-    last_state: dict | None = None
+    terminal_states: set[str] = {"completed", "failed", "cancelled"}
+    last_state: dict[str, Any] | None = None
 
     # Send initial hello
     yield _sse_event("connected", {"review_id": review_id})
 
-    async with async_session_factory() as db_session:
+    session_factory = get_session_factory()
+    async with session_factory() as db_session:
         while True:
             # Check if client disconnected
             if await request.is_disconnected():
@@ -105,10 +101,10 @@ async def _subscribe_review_stream(
             await asyncio.sleep(poll_interval)
 
 
-def _sse_event(event: str, data: dict) -> bytes:
+def _sse_event(event: str, data: dict[str, Any]) -> bytes:
     """Format a single SSE event frame."""
     payload = json.dumps(
-        {"event": event, "data": data, "ts": datetime.now(timezone.utc).isoformat()},
+        {"event": event, "data": data, "ts": datetime.now(UTC).isoformat()},
         default=str,
     )
     return f"event: {event}\ndata: {payload}\n\n".encode()

@@ -1,4 +1,5 @@
 """Review and ReviewComment models — code review records."""
+
 from datetime import datetime
 from typing import Any
 
@@ -32,9 +33,7 @@ class Review(Base, IdMixin, TimestampMixin):
     commit_sha: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     pr_title: Mapped[str | None] = mapped_column(Text, nullable=True)
     pr_author: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    status: Mapped[str] = mapped_column(
-        String(50), default="pending", nullable=False, index=True
-    )
+    status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False, index=True)
     trigger: Mapped[str] = mapped_column(String(50), default="webhook", nullable=False)
     overall_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     security_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -50,24 +49,16 @@ class Review(Base, IdMixin, TimestampMixin):
     info_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     llm_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     llm_tokens_prompt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    llm_tokens_completion: Mapped[int] = mapped_column(
-        Integer, default=0, nullable=False
-    )
+    llm_tokens_completion: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     llm_tokens_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     llm_cost_usd: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    pr_comment_posted: Mapped[bool] = mapped_column(
-        default=False, nullable=False
-    )
-    inline_comments_posted: Mapped[int] = mapped_column(
-        Integer, default=0, nullable=False
-    )
+    pr_comment_posted: Mapped[bool] = mapped_column(default=False, nullable=False)
+    inline_comments_posted: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_result: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    reviewed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     comments: Mapped[list["ReviewComment"]] = relationship(
         back_populates="review", cascade="all, delete-orphan"

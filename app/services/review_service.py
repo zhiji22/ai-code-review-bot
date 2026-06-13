@@ -6,21 +6,20 @@ Review service — CRUD + business logic for reviews and comments.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select, update, func, and_, desc
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, desc, func, select, update
 from sqlalchemy.orm import selectinload
 
 from app.models.review import Review, ReviewComment
-from app.models.repository import Repository
-from app.schemas.reviews import (
-    ReviewCreateSchema,
-    ReviewFiltersSchema,
-    ReviewSchema,
-    ReviewListSchema,
-)
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.schemas.reviews import (
+        ReviewFiltersSchema,
+    )
 
 
 class ReviewService:
@@ -93,7 +92,7 @@ class ReviewService:
             raw_result=raw_result or {},
             pr_comment_posted=pr_comment_posted,
             inline_comments_posted=inline_comments_posted,
-            reviewed_at=datetime.now(timezone.utc),
+            reviewed_at=datetime.now(UTC),
         )
         self.session.add(review)
         await self.session.commit()
@@ -137,7 +136,7 @@ class ReviewService:
             .values(
                 status="failed",
                 error_message=error_message,
-                reviewed_at=datetime.now(timezone.utc),
+                reviewed_at=datetime.now(UTC),
             )
         )
         await self.session.commit()
@@ -176,9 +175,7 @@ class ReviewService:
     async def get_by_id(self, review_id: int) -> Review | None:
         """Get review by ID with comments loaded."""
         result = await self.session.execute(
-            select(Review)
-            .options(selectinload(Review.comments))
-            .where(Review.id == review_id)
+            select(Review).options(selectinload(Review.comments)).where(Review.id == review_id)
         )
         return result.scalar_one_or_none()
 
@@ -208,9 +205,7 @@ class ReviewService:
         if conditions:
             stmt = stmt.where(and_(*conditions))
 
-        total = await self.session.scalar(
-            select(func.count()).select_from(stmt.subquery())
-        )
+        total = await self.session.scalar(select(func.count()).select_from(stmt.subquery()))
 
         sort_col = getattr(Review, filters.sort_by, Review.created_at)
         if filters.sort_order == "asc":
@@ -221,9 +216,7 @@ class ReviewService:
         if filters.cursor:
             stmt = stmt.where(Review.id < filters.cursor)
 
-        result = await self.session.execute(
-            stmt.offset(filters.offset).limit(filters.limit)
-        )
+        result = await self.session.execute(stmt.offset(filters.offset).limit(filters.limit))
         return list(result.scalars().all()), int(total or 0)
 
     async def get_latest_for_pr(

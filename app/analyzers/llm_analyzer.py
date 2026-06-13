@@ -60,7 +60,9 @@ class LLMReviewResult:
 
     @classmethod
     def empty(cls, reason: str = "") -> LLMReviewResult:
-        return cls(summary=f"LLM analysis unavailable: {reason}" if reason else "", score=80, error=reason)
+        return cls(
+            summary=f"LLM analysis unavailable: {reason}" if reason else "", score=80, error=reason
+        )
 
 
 # --- Prompt ---
@@ -138,9 +140,9 @@ async def _get_cached(key: str) -> dict[str, Any] | None:
         redis = await get_redis()
         data = await redis.get(f"llm:{key}")
         if data:
-            return json.loads(data)
+            return json.loads(data)  # type: ignore[no-any-return]
     except Exception as e:
-        logger.warning("cache_read_error", error=str(e))
+        logger.warning("cache_read_error", error=str(e))  # type: ignore[call-arg]
     return None
 
 
@@ -150,7 +152,7 @@ async def _set_cached(key: str, value: dict[str, Any], ttl: int = 86400) -> None
         redis = await get_redis()
         await redis.set(f"llm:{key}", json.dumps(value), ex=ttl)
     except Exception as e:
-        logger.warning("cache_write_error", error=str(e))
+        logger.warning("cache_write_error", error=str(e))  # type: ignore[call-arg]
 
 
 # --- Analyzer ---
@@ -213,7 +215,7 @@ class LLMAnalyzer:
             result = _parse_response(cached)
             result.cached = True
             result.model = cached.get("model", "")
-            logger.info("llm_cache_hit", file=file_path, key=cache_key[:16])
+            logger.info("llm_cache_hit", file=file_path, key=cache_key[:16])  # type: ignore[call-arg]
             return result
 
         # 2. Build prompt
@@ -245,9 +247,7 @@ class LLMAnalyzer:
             # Add token usage info
             data["model"] = response.model
             data["prompt_tokens"] = response.usage.prompt_tokens if response.usage else 0
-            data["completion_tokens"] = (
-                response.usage.completion_tokens if response.usage else 0
-            )
+            data["completion_tokens"] = response.usage.completion_tokens if response.usage else 0
             data["total_tokens"] = response.usage.total_tokens if response.usage else 0
 
             # 5. Cache result
@@ -260,7 +260,7 @@ class LLMAnalyzer:
             result.completion_tokens = data["completion_tokens"]
             result.total_tokens = data["total_tokens"]
 
-            logger.info(
+            logger.info(  # type: ignore[call-arg]
                 "llm_analyze_success",
                 file=file_path,
                 model=model,
@@ -270,16 +270,16 @@ class LLMAnalyzer:
             return result
 
         except RateLimitError as e:
-            logger.warning("llm_rate_limited", file=file_path, error=str(e))
+            logger.warning("llm_rate_limited", file=file_path, error=str(e))  # type: ignore[call-arg]
             return LLMReviewResult.empty("OpenAI rate limit exceeded")
         except APITimeoutError as e:
-            logger.warning("llm_timeout", file=file_path, error=str(e))
+            logger.warning("llm_timeout", file=file_path, error=str(e))  # type: ignore[call-arg]
             return LLMReviewResult.empty("OpenAI request timed out")
         except (APIError, json.JSONDecodeError) as e:
-            logger.error("llm_api_error", file=file_path, error=str(e))
+            logger.error("llm_api_error", file=file_path, error=str(e))  # type: ignore[call-arg]
             return LLMReviewResult.empty(f"LLM API error: {e!s}")
         except Exception as e:
-            logger.error("llm_unexpected_error", file=file_path, error=str(e))
+            logger.error("llm_unexpected_error", file=file_path, error=str(e))  # type: ignore[call-arg]
             return LLMReviewResult.empty(f"Unexpected error: {e!s}")
 
 
@@ -299,17 +299,21 @@ def _build_user_prompt(
         "```",
     ]
     if file_context and file_context != code_diff:
-        parts.extend([
+        parts.extend(
+            [
+                "",
+                "### File Context (for reference):",
+                "```" + language,
+                file_context[:4000],
+                "```",
+            ]
+        )
+    parts.extend(
+        [
             "",
-            "### File Context (for reference):",
-            "```" + language,
-            file_context[:4000],
-            "```",
-        ])
-    parts.extend([
-        "",
-        "Analyze the diff above and respond with the JSON schema.",
-    ])
+            "Analyze the diff above and respond with the JSON schema.",
+        ]
+    )
     return "\n".join(parts)
 
 

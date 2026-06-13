@@ -7,21 +7,23 @@ and GitHub API interactions.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 try:
     from prometheus_client import (
+        CONTENT_TYPE_LATEST,
         Counter,
         Gauge,
         Histogram,
         Info,
         generate_latest,
-        CONTENT_TYPE_LATEST,
     )
 except ImportError:
     # Fallback if prometheus_client not installed
-    Counter = Histogram = Gauge = Info = None
-    generate_latest = lambda: b""  # noqa: E731
+    Counter = None  # type: ignore[assignment,misc]
+    Histogram = None  # type: ignore[assignment,misc]
+    Gauge = None  # type: ignore[assignment,misc]
+    Info = None  # type: ignore[assignment,misc]
+    generate_latest = lambda: b""  # type: ignore[assignment,misc]  # noqa: E731
     CONTENT_TYPE_LATEST = "text/plain"
 
 logger = logging.getLogger(__name__)
@@ -97,7 +99,7 @@ LLM_CALLS = Counter(
 LLM_TOKENS = Counter(
     "review_llm_tokens_total",
     "Total LLM tokens used",
-    ["model", "type"],  # type: prompt, completion
+    ["model", "type"],  # label values: prompt, completion
 )
 
 LLM_COST = Counter(

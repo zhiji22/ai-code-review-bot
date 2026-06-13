@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import pytest
-
-from app.analyzers.result_aggregator import (
-    ResultAggregator,
-    UnifiedIssue,
-    ReviewScores,
-    AggregatedResult,
-)
 from app.analyzers.ast_analyzer import ASTIssue, ASTReport
-from app.analyzers.rule_engine import RuleViolation, RuleCategory, RuleSeverity
+from app.analyzers.result_aggregator import (
+    AggregatedResult,
+    ResultAggregator,
+)
+from app.analyzers.rule_engine import RuleCategory, RuleSeverity, RuleViolation
 
 
 class TestResultAggregator:
@@ -69,7 +66,7 @@ class TestResultAggregator:
                 severity=RuleSeverity.CRITICAL,
                 message="SQL injection risk",
                 suggestion="Use parameterized queries",
-                matched_text="f\"SELECT * FROM\"",
+                matched_text='f"SELECT * FROM"',
             ),
         ]
         file_result = self._make_file_result(rule_violations=violations)
@@ -121,9 +118,7 @@ class TestResultAggregator:
                 matched_text="SELECT",
             ),
         ]
-        file_result = self._make_file_result(
-            ast_issues=ast_issues, rule_violations=violations
-        )
+        file_result = self._make_file_result(ast_issues=ast_issues, rule_violations=violations)
         result = aggregator.aggregate([file_result])
         # Different categories shouldn't dedup
         assert len(result.issues) >= 2

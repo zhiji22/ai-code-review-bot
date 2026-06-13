@@ -45,7 +45,9 @@ def setup_logging(level: str = "INFO") -> None:
     formatter = structlog.stdlib.ProcessorFormatter(
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.dev.ConsoleRenderer() if level == "DEBUG" else structlog.processors.JSONRenderer(),
+            structlog.dev.ConsoleRenderer()
+            if level == "DEBUG"
+            else structlog.processors.JSONRenderer(),
         ],
         foreign_pre_chain=shared_processors,
     )

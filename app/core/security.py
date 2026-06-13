@@ -100,6 +100,7 @@ def prevent_replay(timestamp_header: str, max_age_seconds: int = 300) -> None:
 # ------------------------------------------------------------------ Secret Encryption
 # Per §15: webhook_secret stored as BYTEA, encrypted at rest.
 
+
 def _derive_key(secret: str) -> bytes:
     """Derive a Fernet-compatible key from a passphrase."""
     digest = hashlib.sha256(secret.encode("utf-8")).digest()

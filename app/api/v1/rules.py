@@ -123,7 +123,11 @@ async def toggle_rule(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ApiResponse[RuleSchema]:
     service = RuleService(db)
-    rule = await service.toggle(rule_id)
+    # Toggle flips the current enabled state
+    existing = await service.get_by_id(rule_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Rule {rule_id} not found")
+    rule = await service.toggle(rule_id, not existing.enabled)
     if rule is None:
         raise HTTPException(status_code=404, detail=f"Rule {rule_id} not found")
     return ApiResponse(data=RuleSchema.model_validate(rule, from_attributes=True))

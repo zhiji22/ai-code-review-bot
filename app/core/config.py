@@ -24,7 +24,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="forbid",
+        extra="ignore",
     )
 
     # ── App ──────────────────────────────────────────────
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     db_max_overflow: int = 20
     db_echo: bool = False
 
-    @computed_field  # type: ignore[prop]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url(self) -> str:
         return (
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
         )
 
-    @computed_field  # type: ignore[prop]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def sync_database_url(self) -> str:
         return (
@@ -69,19 +69,19 @@ class Settings(BaseSettings):
     redis_db_celery_broker: int = 1
     redis_db_celery_result: int = 2
 
-    @computed_field  # type: ignore[prop]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def redis_url(self) -> str:
         auth = f":{self.redis_password}@" if self.redis_password else ""
         return f"redis://{auth}{self.redis_host}:{self.redis_port}/{self.redis_db_default}"
 
-    @computed_field  # type: ignore[prop]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def celery_broker_url(self) -> str:
         auth = f":{self.redis_password}@" if self.redis_password else ""
         return f"redis://{auth}{self.redis_host}:{self.redis_port}/{self.redis_db_celery_broker}"
 
-    @computed_field  # type: ignore[prop]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def celery_result_backend(self) -> str:
         auth = f":{self.redis_password}@" if self.redis_password else ""
@@ -162,4 +162,4 @@ def get_settings() -> Settings:
     return Settings()
 
 
-settings = get_settings()  # type: ignore[call-arg]
+settings = get_settings()

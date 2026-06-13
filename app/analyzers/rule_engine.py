@@ -9,20 +9,19 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class RuleCategory(str, Enum):
+class RuleCategory(StrEnum):
     SECURITY = "security"
     PERFORMANCE = "performance"
     STYLE = "style"
     BEST_PRACTICES = "best_practices"
 
 
-class RuleSeverity(str, Enum):
+class RuleSeverity(StrEnum):
     CRITICAL = "critical"
     WARNING = "warning"
     INFO = "info"
@@ -51,7 +50,7 @@ class Rule:
         try:
             return list(re.finditer(self.pattern, code, re.MULTILINE | re.IGNORECASE))
         except re.error as e:
-            logger.warning("rule_regex_error", rule_id=self.rule_id, error=str(e))
+            logger.warning("rule_regex_error", rule_id=self.rule_id, error=str(e))  # type: ignore[call-arg]
             return []
 
 
@@ -81,11 +80,11 @@ BUILTIN_RULES: list[Rule] = [
         severity=RuleSeverity.CRITICAL,
         pattern=(
             r'(?:execute|cursor\.execute)\s*\(\s*["\']'
-            r'(?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\s+.*?'
+            r"(?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\s+.*?"
             r'(?:\+|\%|\bf\b|\.format|f["\'])'
         ),
         message="Potential SQL injection: dynamic query with string concatenation",
-        suggestion="Use parameterized queries: cursor.execute(\"SELECT ... WHERE id = %s\", (val,))",
+        suggestion='Use parameterized queries: cursor.execute("SELECT ... WHERE id = %s", (val,))',
         languages=["python"],
     ),
     Rule(
@@ -94,7 +93,7 @@ BUILTIN_RULES: list[Rule] = [
         category=RuleCategory.SECURITY,
         severity=RuleSeverity.CRITICAL,
         pattern=(
-            r'(?i)(?:password|secret|api[_-]?key|token|private[_-]?key)\s*[=:]\s*'
+            r"(?i)(?:password|secret|api[_-]?key|token|private[_-]?key)\s*[=:]\s*"
             r'["\'][^"\']{8,}["\']'
         ),
         message="Hardcoded secret/token detected",
@@ -106,7 +105,7 @@ BUILTIN_RULES: list[Rule] = [
         name="Unsafe Deserialization",
         category=RuleCategory.SECURITY,
         severity=RuleSeverity.CRITICAL,
-        pattern=r'(?:pickle\.loads|yaml\.load|eval|exec)\s*\(',
+        pattern=r"(?:pickle\.loads|yaml\.load|eval|exec)\s*\(",
         message="Unsafe deserialization or code execution",
         suggestion="Use json.loads() or yaml.safe_load(); avoid eval()/exec()",
         languages=["python"],
@@ -116,7 +115,7 @@ BUILTIN_RULES: list[Rule] = [
         name="XSS via innerHTML",
         category=RuleCategory.SECURITY,
         severity=RuleSeverity.CRITICAL,
-        pattern=r'\.innerHTML\s*=\s*[^;]+',
+        pattern=r"\.innerHTML\s*=\s*[^;]+",
         message="Potential XSS: setting innerHTML with untrusted content",
         suggestion="Use textContent or sanitize HTML with DOMPurify before setting innerHTML",
         languages=["javascript", "typescript"],
@@ -126,7 +125,7 @@ BUILTIN_RULES: list[Rule] = [
         name="Disabled HTTPS Verification",
         category=RuleCategory.SECURITY,
         severity=RuleSeverity.CRITICAL,
-        pattern=r'verify\s*=\s*False',
+        pattern=r"verify\s*=\s*False",
         message="SSL/TLS verification disabled",
         suggestion="Never disable certificate verification in production code",
         languages=["python"],
@@ -146,7 +145,7 @@ BUILTIN_RULES: list[Rule] = [
         name="Weak Hashing",
         category=RuleCategory.SECURITY,
         severity=RuleSeverity.WARNING,
-        pattern=r'hashlib\.(?:md5|sha1)\s*\(',
+        pattern=r"hashlib\.(?:md5|sha1)\s*\(",
         message="Weak hash algorithm (MD5/SHA1) is insecure for cryptographic purposes",
         suggestion="Use hashlib.sha256 or hashlib.sha512 for security-sensitive hashing",
         languages=["python"],
@@ -156,7 +155,7 @@ BUILTIN_RULES: list[Rule] = [
         name="Debug Mode in Production",
         category=RuleCategory.SECURITY,
         severity=RuleSeverity.WARNING,
-        pattern=r'(?:DEBUG\s*=\s*True|app\.run\s*\(\s*debug\s*=\s*True)',
+        pattern=r"(?:DEBUG\s*=\s*True|app\.run\s*\(\s*debug\s*=\s*True)",
         message="Debug mode enabled - exposes sensitive info in production",
         suggestion="Set DEBUG=False in production; use environment variables",
         languages=["python"],
@@ -166,7 +165,7 @@ BUILTIN_RULES: list[Rule] = [
         name="Insecure Random",
         category=RuleCategory.SECURITY,
         severity=RuleSeverity.WARNING,
-        pattern=r'random\.random\s*\(\s*\)',
+        pattern=r"random\.random\s*\(\s*\)",
         message="Insecure random number generator for security context",
         suggestion="Use secrets module for tokens, passwords, and security-sensitive randomness",
         languages=["python"],
@@ -176,19 +175,18 @@ BUILTIN_RULES: list[Rule] = [
         name="Broad Exception Handler",
         category=RuleCategory.SECURITY,
         severity=RuleSeverity.WARNING,
-        pattern=r'except\s*(?:Exception|BaseException)?\s*:\s*pass',
+        pattern=r"except\s*(?:Exception|BaseException)?\s*:\s*pass",
         message="Silent exception swallowing (bare except + pass)",
         suggestion="Log the exception and handle specifically: except SpecificError as e: logger.error(...)",
         languages=["python"],
     ),
-
     # Performance Rules (PERF001-PERF005)
     Rule(
         rule_id="PERF001",
         name="N+1 Query Pattern",
         category=RuleCategory.PERFORMANCE,
         severity=RuleSeverity.WARNING,
-        pattern=r'(?:for\s+\w+\s+in\s+\w+\.objects|for\s+\w+\s+in\s+\w+\.all\(\)|for\s+\w+\s+in\s+\w+\.filter\()',
+        pattern=r"(?:for\s+\w+\s+in\s+\w+\.objects|for\s+\w+\s+in\s+\w+\.all\(\)|for\s+\w+\s+in\s+\w+\.filter\()",
         message="Potential N+1 query: database access inside a loop",
         suggestion="Use select_related/prefetch_related or batch fetch before the loop",
         languages=["python"],
@@ -198,7 +196,7 @@ BUILTIN_RULES: list[Rule] = [
         name="List Append in Loop",
         category=RuleCategory.PERFORMANCE,
         severity=RuleSeverity.INFO,
-        pattern=r'for\s+\w+\s+in\s+\w+:\s*\n\s*\w+\.append\(',
+        pattern=r"for\s+\w+\s+in\s+\w+:\s*\n\s*\w+\.append\(",
         message="Building list in a loop with append - consider list comprehension",
         suggestion="Use list comprehension: [transform(x) for x in items]",
         languages=["python"],
@@ -218,7 +216,7 @@ BUILTIN_RULES: list[Rule] = [
         name="Global Mutable State",
         category=RuleCategory.PERFORMANCE,
         severity=RuleSeverity.WARNING,
-        pattern=r'^(?:\s*_?\w+\s*:\s*(?:list|dict|set)\s*=\s*(?:\[\]|\{\}|\{\}|\(\)))',
+        pattern=r"^(?:\s*_?\w+\s*:\s*(?:list|dict|set)\s*=\s*(?:\[\]|\{\}|\{\}|\(\)))",
         message="Module-level mutable default (potential shared state issue)",
         suggestion="Initialize inside function or use None as default and create inside",
         languages=["python"],
@@ -228,19 +226,18 @@ BUILTIN_RULES: list[Rule] = [
         name="Synchronous IO in Async",
         category=RuleCategory.PERFORMANCE,
         severity=RuleSeverity.WARNING,
-        pattern=r'async\s+def\s+\w+.*:\s*\n(?:.*\n)*?.*(?:requests\.|urllib\.|open\()',
+        pattern=r"async\s+def\s+\w+.*:\s*\n(?:.*\n)*?.*(?:requests\.|urllib\.|open\()",
         message="Blocking I/O inside async function",
         suggestion="Use aiohttp/httpx for HTTP, aiofiles for file I/O in async contexts",
         languages=["python"],
     ),
-
     # Style Rules (STYLE001-STYLE004)
     Rule(
         rule_id="STYLE001",
         name="Long Line",
         category=RuleCategory.STYLE,
         severity=RuleSeverity.INFO,
-        pattern=r'^.{121,}$',
+        pattern=r"^.{121,}$",
         message="Line exceeds 120 characters",
         suggestion="Break long lines for readability",
         languages=["all"],
@@ -250,7 +247,7 @@ BUILTIN_RULES: list[Rule] = [
         name="TODO/FIXME Comment",
         category=RuleCategory.STYLE,
         severity=RuleSeverity.INFO,
-        pattern=r'(?:TODO|FIXME|HACK|XXX)\b',
+        pattern=r"(?:TODO|FIXME|HACK|XXX)\b",
         message="Unresolved TODO/FIXME comment",
         suggestion="Create a ticket or resolve before merging",
         languages=["all"],
@@ -260,7 +257,7 @@ BUILTIN_RULES: list[Rule] = [
         name="Print Statement",
         category=RuleCategory.STYLE,
         severity=RuleSeverity.INFO,
-        pattern=r'^\s*print\s*\(',
+        pattern=r"^\s*print\s*\(",
         message="Print statement found (should use logging in production)",
         suggestion="Replace print() with logger.info/debug/warning",
         languages=["python"],
@@ -270,19 +267,18 @@ BUILTIN_RULES: list[Rule] = [
         name="Magic Number",
         category=RuleCategory.STYLE,
         severity=RuleSeverity.INFO,
-        pattern=r'(?:==|!=|<=|>=|<|>)\s*(\d{3,})',
+        pattern=r"(?:==|!=|<=|>=|<|>)\s*(\d{3,})",
         message="Magic number in comparison - extract to named constant",
         suggestion="Define: MAX_RETRIES = 500; if count > MAX_RETRIES: ...",
         languages=["all"],
     ),
-
     # Best Practices (BP001-BP004)
     Rule(
         rule_id="BP001",
         name="Missing Type Hints",
         category=RuleCategory.BEST_PRACTICES,
         severity=RuleSeverity.INFO,
-        pattern=r'def\s+\w+\s*\([^)]*\)\s*:',
+        pattern=r"def\s+\w+\s*\([^)]*\)\s*:",
         message="Function lacks type annotations",
         suggestion="Add type hints: def func(x: int) -> str:",
         languages=["python"],
@@ -292,7 +288,7 @@ BUILTIN_RULES: list[Rule] = [
         name="Mutable Default Argument",
         category=RuleCategory.BEST_PRACTICES,
         severity=RuleSeverity.WARNING,
-        pattern=r'def\s+\w+\([^)]*=\s*(?:\[\]|\{\})',
+        pattern=r"def\s+\w+\([^)]*=\s*(?:\[\]|\{\})",
         message="Mutable default argument (list/dict) - shared across calls",
         suggestion="Use None as default: def func(x=None): x = x or []",
         languages=["python"],
@@ -302,9 +298,9 @@ BUILTIN_RULES: list[Rule] = [
         name="String Formatting",
         category=RuleCategory.BEST_PRACTICES,
         severity=RuleSeverity.INFO,
-        pattern=r'\.format\s*\(',
+        pattern=r"\.format\s*\(",
         message="Using .format() instead of f-string",
-        suggestion="Use f-string: f\"Hello {name}\" for better readability",
+        suggestion='Use f-string: f"Hello {name}" for better readability',
         languages=["python"],
     ),
     Rule(
@@ -312,7 +308,7 @@ BUILTIN_RULES: list[Rule] = [
         name="Assert in Production",
         category=RuleCategory.BEST_PRACTICES,
         severity=RuleSeverity.WARNING,
-        pattern=r'^\s*assert\s+',
+        pattern=r"^\s*assert\s+",
         message="Assert statement removed when running with -O flag",
         suggestion="Use if not condition: raise ValueError(...) for runtime checks",
         languages=["python"],
@@ -349,16 +345,10 @@ class RuleEngine:
         violations: list[RuleViolation] = []
         active_rules = rules if rules is not None else self.rules
 
-        lines = code.split("\n")
-
         for rule in active_rules:
             if not rule.enabled:
                 continue
-            if (
-                rule.languages
-                and language not in rule.languages
-                and "all" not in rule.languages
-            ):
+            if rule.languages and language not in rule.languages and "all" not in rule.languages:
                 continue
 
             matches = rule.matches(code, language)
@@ -384,9 +374,7 @@ class RuleEngine:
 
         return violations
 
-    def get_rules_by_category(
-        self, category: RuleCategory
-    ) -> list[Rule]:
+    def get_rules_by_category(self, category: RuleCategory) -> list[Rule]:
         """Filter rules by category."""
         return [r for r in self.rules if r.category == category and r.enabled]
 

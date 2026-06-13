@@ -32,7 +32,10 @@ async def list_repositories(
     limit: int = Query(20, ge=1, le=100),
 ) -> ApiResponse[PaginatedResponse[RepositoryListSchema]]:
     service = RepositoryService(db)
-    repos, total = await service.list_active(limit=limit) if active_only else (await service._list_all(limit=limit), 0)
+    if active_only:
+        repos, total = await service.list_active(limit=limit)
+    else:
+        repos, total = await service.list_all(limit=limit)
     # Convert to list schema
     items = [
         RepositoryListSchema(

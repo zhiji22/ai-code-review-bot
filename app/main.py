@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from fastapi import FastAPI
@@ -19,6 +19,9 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.v1 import api_router
 from app.core.config import get_settings
 from app.core.logging import setup_logging
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger(__name__)
 
@@ -30,11 +33,11 @@ def _init_sentry() -> None:
         return
     try:
         import sentry_sdk
-        from sentry_sdk.integrations.fastapi import FastApiIntegration
         from sentry_sdk.integrations.celery import CeleryIntegration
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.logging import LoggingIntegration
         from sentry_sdk.integrations.redis import RedisIntegration
         from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-        from sentry_sdk.integrations.logging import LoggingIntegration
 
         sentry_sdk.init(
             dsn=settings.sentry_dsn,
@@ -50,7 +53,7 @@ def _init_sentry() -> None:
                 SqlalchemyIntegration(),
                 LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
             ],
-            before_send=_scrub_sensitive_data,
+            before_send=_scrub_sensitive_data,  # type: ignore[arg-type]
         )
         logger.info("sentry_initialized", env=settings.app_env)
     except ImportError:
@@ -59,7 +62,7 @@ def _init_sentry() -> None:
         logger.error("sentry_init_failed", error=str(exc))
 
 
-def _scrub_sensitive_data(event: dict, hint: dict) -> dict | None:
+def _scrub_sensitive_data(event: dict[str, Any], hint: dict[str, Any]) -> dict[str, Any] | None:
     """Strip sensitive data from Sentry events before sending (§15 Security)."""
     if "request" in event:
         headers = event["request"].get("headers", {})

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.analyzers.ast_analyzer import ASTAnalyzer, ASTReport
 
 
@@ -26,7 +25,7 @@ class TestASTAnalyzer:
         assert report.lines_of_code > 0
 
     def test_detects_function_complexity(self, analyzer: ASTAnalyzer) -> None:
-        code = '''def complex_func(x):
+        code = """def complex_func(x):
     if x > 0:
         if x > 10:
             if x > 100:
@@ -34,25 +33,25 @@ class TestASTAnalyzer:
                     for i in range(x):
                         if i % 2 == 0:
                             pass
-'''
+"""
         report = analyzer.analyze("test.py", code, "python")
         assert report.max_complexity > 5 or len(report.issues) > 0
 
     def test_detects_nesting_depth(self, analyzer: ASTAnalyzer) -> None:
-        code = '''def deep_nesting(data):
+        code = """def deep_nesting(data):
     if data:
         if data.get("a"):
             if data["a"].get("b"):
                 if data["a"]["b"].get("c"):
                     return True
     return False
-'''
+"""
         report = analyzer.analyze("test.py", code, "python")
         nesting_issues = [i for i in report.issues if "nesting" in i.issue_type.lower()]
         assert len(nesting_issues) > 0 or report.max_complexity > 3
 
     def test_count_functions(self, analyzer: ASTAnalyzer) -> None:
-        code = '''def func1():
+        code = """def func1():
     pass
 
 def func2():
@@ -61,8 +60,12 @@ def func2():
 class MyClass:
     def method(self):
         pass
-'''
-        report = analyzer.analyzer("test.py", code, "python") if hasattr(analyzer, "analyzer") else analyzer.analyze("test.py", code, "python")
+"""
+        report = (
+            analyzer.analyzer("test.py", code, "python")
+            if hasattr(analyzer, "analyzer")
+            else analyzer.analyze("test.py", code, "python")
+        )
         assert report.function_count >= 3
 
     def test_parse_error_handling(self, analyzer: ASTAnalyzer) -> None:
@@ -85,5 +88,7 @@ class MyClass:
         lines = ["def very_long_function():"] + ["    x = 1"] * 60
         code = "\n".join(lines)
         report = analyzer.analyze("test.py", code, "python")
-        length_issues = [i for i in report.issues if "length" in i.message.lower() or "long" in i.message.lower()]
+        length_issues = [
+            i for i in report.issues if "length" in i.message.lower() or "long" in i.message.lower()
+        ]
         assert len(length_issues) > 0 or report.lines_of_code > 60

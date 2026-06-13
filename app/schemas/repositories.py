@@ -86,8 +86,8 @@ class RepositoryCreateSchema(BaseModel):
 
 __all__ = [
     "RepositoryCreateSchema",
-    "RepositorySettingsSchema",
-    "RepositorySchema",
     "RepositoryListSchema",
+    "RepositorySchema",
+    "RepositorySettingsSchema",
     "RepositoryUpdateSchema",
 ]

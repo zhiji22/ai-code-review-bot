@@ -45,11 +45,14 @@ async def dev_login() -> ApiResponse[TokenSchema]:
         )
 
     # Dev user gets ID=1 — get_current_user will synthesize a User for this ID
-    access = AuthService.create_access_token(1, extra={
-        "username": "dev_user",
-        "email": "dev@test.com",
-        "is_admin": True,
-    })
+    access = AuthService.create_access_token(
+        1,
+        extra={
+            "username": "dev_user",
+            "email": "dev@test.com",
+            "is_admin": True,
+        },
+    )
     refresh = AuthService.create_refresh_token(1)
 
     return ApiResponse(
@@ -90,11 +93,14 @@ async def github_login(
         ) from exc
 
     user: User = result["user"]
-    access = AuthService.create_access_token(user.id, extra={
-        "username": user.username,
-        "email": user.email or "",
-        "is_admin": user.is_admin,
-    })
+    access = AuthService.create_access_token(
+        user.id,
+        extra={
+            "username": user.username,
+            "email": user.email or "",
+            "is_admin": user.is_admin,
+        },
+    )
     refresh = AuthService.create_refresh_token(user.id)
 
     return ApiResponse(
@@ -120,11 +126,11 @@ async def refresh_token(
     service = AuthService(db)
     try:
         token_payload = service.decode_token(payload.refresh_token)
-    except jwt.PyJWTError:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
-        )
+        ) from exc
     user_id = int(token_payload["sub"])
     user = await service.get_user_by_id(user_id)
     if user is None or not user.is_active:

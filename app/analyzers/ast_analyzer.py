@@ -12,17 +12,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
 
-from tree_sitter import Language, Node, Parser
+from tree_sitter import Node, Parser
 
 try:
     from tree_sitter_languages import get_language, get_parser
+
     _HAS_TS_LANGS = True
 except ImportError:
     _HAS_TS_LANGS = False
-    get_language = None  # type: ignore
-    get_parser = None  # type: ignore
+    get_language = None
+    get_parser = None
 
 logger = logging.getLogger(__name__)
 
@@ -82,11 +82,8 @@ class ASTAnalyzer:
         if language in self._parsers:
             return self._parsers[language]
         try:
-            if _HAS_TS_LANGS:
-                parser = get_parser(language)
-            else:
-                # Fallback: individual tree-sitter packages
-                parser = self._build_parser(language)
+            # Fallback: individual tree-sitter packages when tree-sitter-langs not available
+            parser = get_parser(language) if _HAS_TS_LANGS else self._build_parser(language)
             self._parsers[language] = parser
             return parser
         except Exception as e:
@@ -95,9 +92,10 @@ class ASTAnalyzer:
 
     def _build_parser(self, language: str) -> Parser:
         """Build parser from individual tree-sitter packages."""
-        import tree_sitter_python
         import tree_sitter_javascript
+        import tree_sitter_python
         import tree_sitter_typescript
+        from tree_sitter import Language
 
         lang_map = {
             "python": tree_sitter_python,
@@ -108,7 +106,7 @@ class ASTAnalyzer:
             raise ValueError(f"Unsupported language: {language}")
 
         lang_module = lang_map[language]
-        # tree-sitter 0.23+: language() returns PyCapsule, wrap in Language
+        # tree-sitter 0.21: language() returns PyCapsule, wrap in Language
         ts_lang = Language(lang_module.language())
         parser = Parser(ts_lang)
         return parser
@@ -163,7 +161,7 @@ class ASTAnalyzer:
     ) -> None:
         """Walk AST nodes and check for issues."""
         # Language-specific function/method node types
-        FUNC_TYPES = {
+        func_types = {
             "python": {"function_definition"},
             "javascript": {"function_declaration", "method_definition", "arrow_function"},
             "typescript": {"function_declaration", "method_definition", "arrow_function"},
@@ -171,7 +169,7 @@ class ASTAnalyzer:
             "go": {"function_declaration", "method_declaration"},
         }
 
-        IMPORT_TYPES = {
+        import_types = {
             "python": {"import_statement", "import_from_statement"},
             "javascript": {"import_statement"},
             "typescript": {"import_statement", "import_alias"},
@@ -179,14 +177,14 @@ class ASTAnalyzer:
             "go": {"import_declaration"},
         }
 
-        func_types = FUNC_TYPES.get(language, set())
-        import_types = IMPORT_TYPES.get(language, set())
+        local_func_types = func_types.get(language, set())
+        local_import_types = import_types.get(language, set())
 
-        if node.type in func_types:
+        if node.type in local_func_types:
             self._check_function(node, code, report)
             report.function_count += 1
 
-        if node.type in import_types:
+        if node.type in local_import_types:
             report.import_count += 1
             self._check_unused_import(node, code, report, language)
 
@@ -212,60 +210,67 @@ class ASTAnalyzer:
 
         # 1. Function too long
         if func_length > MAX_FUNCTION_LENGTH:
-            report.issues.append(ASTIssue(
-                line_number=start_line,
-                line_end=end_line,
-                category="maintainability",
-                severity="warning",
-                message=f"Function '{func_name}' is {func_length} lines long (max {MAX_FUNCTION_LENGTH})",
-                suggestion="Consider breaking into smaller functions",
-                issue_type="long_function",
-            ))
+            report.issues.append(
+                ASTIssue(
+                    line_number=start_line,
+                    line_end=end_line,
+                    category="maintainability",
+                    severity="warning",
+                    message=f"Function '{func_name}' is {func_length} lines long (max {MAX_FUNCTION_LENGTH})",
+                    suggestion="Consider breaking into smaller functions",
+                    issue_type="long_function",
+                )
+            )
 
         # 2. Parameter count
         params_node = node.child_by_field_name("parameters")
         if params_node:
             param_count = sum(
-                1 for c in params_node.children
-                if c.type not in {",", "(", ")", "comment"}
+                1 for c in params_node.children if c.type not in {",", "(", ")", "comment"}
             )
             if param_count > MAX_PARAMS:
-                report.issues.append(ASTIssue(
-                    line_number=start_line,
-                    category="maintainability",
-                    severity="info",
-                    message=f"Function '{func_name}' has {param_count} parameters (max {MAX_PARAMS})",
-                    suggestion="Consider using a config object or dataclass",
-                    issue_type="too_many_params",
-                ))
+                report.issues.append(
+                    ASTIssue(
+                        line_number=start_line,
+                        category="maintainability",
+                        severity="info",
+                        message=f"Function '{func_name}' has {param_count} parameters (max {MAX_PARAMS})",
+                        suggestion="Consider using a config object or dataclass",
+                        issue_type="too_many_params",
+                    )
+                )
 
         # 3. Cyclomatic complexity
         complexity = _calc_complexity(node)
         report.max_complexity = max(report.max_complexity, complexity)
         if complexity > MAX_CYCLOMATIC_COMPLEXITY:
-            report.issues.append(ASTIssue(
-                line_number=start_line,
-                category="maintainability",
-                severity="warning",
-                message=(
-                    f"Function '{func_name}' has cyclomatic complexity {complexity} "
-                    f"(max {MAX_CYCLOMATIC_COMPLEXITY})"
-                ),
-                suggestion="Reduce branching: extract helpers, use early returns, guard clauses",
-                issue_type="high_complexity",
-            ))
+            report.issues.append(
+                ASTIssue(
+                    line_number=start_line,
+                    category="maintainability",
+                    severity="warning",
+                    message=(
+                        f"Function '{func_name}' has cyclomatic complexity {complexity} "
+                        f"(max {MAX_CYCLOMATIC_COMPLEXITY})"
+                    ),
+                    suggestion="Reduce branching: extract helpers, use early returns, guard clauses",
+                    issue_type="high_complexity",
+                )
+            )
 
         # 4. Nesting depth
         depth = _max_nesting(node)
         if depth > MAX_NESTING_DEPTH:
-            report.issues.append(ASTIssue(
-                line_number=start_line,
-                category="maintainability",
-                severity="info",
-                message=f"Function '{func_name}' has nesting depth {depth} (max {MAX_NESTING_DEPTH})",
-                suggestion="Flatten nesting with early returns or extract nested logic",
-                issue_type="deep_nesting",
-            ))
+            report.issues.append(
+                ASTIssue(
+                    line_number=start_line,
+                    category="maintainability",
+                    severity="info",
+                    message=f"Function '{func_name}' has nesting depth {depth} (max {MAX_NESTING_DEPTH})",
+                    suggestion="Flatten nesting with early returns or extract nested logic",
+                    issue_type="deep_nesting",
+                )
+            )
 
     def _check_unused_import(
         self,
@@ -302,14 +307,16 @@ class ASTAnalyzer:
             occurrences = search_code.count(imported_name)
             if occurrences == 0:
                 line_num = node.start_point[0] + 1
-                report.issues.append(ASTIssue(
-                    line_number=line_num,
-                    category="maintainability",
-                    severity="info",
-                    message=f"Import '{imported_name}' appears unused",
-                    suggestion=f"Remove unused import: {imported_name}",
-                    issue_type="unused_import",
-                ))
+                report.issues.append(
+                    ASTIssue(
+                        line_number=line_num,
+                        category="maintainability",
+                        severity="info",
+                        message=f"Import '{imported_name}' appears unused",
+                        suggestion=f"Remove unused import: {imported_name}",
+                        issue_type="unused_import",
+                    )
+                )
 
 
 # --- Helpers ---
@@ -353,7 +360,7 @@ def _count_comments(code: str, language: str) -> int:
 def _calc_complexity(node: Node) -> int:
     """Calculate cyclomatic complexity of a function node."""
     # Decision points: if, elif, for, while, except, and, or, case
-    DECISION_TYPES = {
+    decision_types = {
         "if_statement",
         "for_statement",
         "while_statement",
@@ -366,7 +373,7 @@ def _calc_complexity(node: Node) -> int:
     stack = list(node.children)
     while stack:
         child = stack.pop()
-        if child.type in DECISION_TYPES:
+        if child.type in decision_types:
             complexity += 1
         stack.extend(child.children)
     return complexity
@@ -374,7 +381,7 @@ def _calc_complexity(node: Node) -> int:
 
 def _max_nesting(node: Node, current_depth: int = 0) -> int:
     """Calculate maximum nesting depth within a function."""
-    NESTING_TYPES = {
+    nesting_types = {
         "if_statement",
         "for_statement",
         "while_statement",
@@ -387,7 +394,7 @@ def _max_nesting(node: Node, current_depth: int = 0) -> int:
     }
     max_d = current_depth
     for child in node.children:
-        if child.type in NESTING_TYPES:
+        if child.type in nesting_types:
             child_depth = _max_nesting(child, current_depth + 1)
             max_d = max(max_d, child_depth)
         else:

@@ -14,9 +14,10 @@ Error handling: each analyzer fails independently; partial results are acceptabl
 from __future__ import annotations
 
 import asyncio
-import structlog
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, cast
+
+import structlog
 
 from app.analyzers.ast_analyzer import ASTAnalyzer, ASTReport
 from app.analyzers.llm_analyzer import LLMAnalyzer, LLMReviewResult
@@ -25,9 +26,10 @@ from app.analyzers.result_aggregator import (
     ResultAggregator,
 )
 from app.analyzers.rule_engine import RuleEngine, RuleViolation
-from app.core.config import settings
 from app.services.comment_formatter import CommentFormatter
-from app.services.github_client import FileDiff, GitHubClient, PRInfo
+
+if TYPE_CHECKING:
+    from app.services.github_client import FileDiff, GitHubClient
 
 logger = structlog.get_logger(__name__)
 
@@ -165,9 +167,7 @@ class ReviewEngine:
             )
 
             # 8. Post to GitHub
-            await self._post_to_github(
-                github_client, repo_full_name, pr_number, commit_sha, result
-            )
+            await self._post_to_github(github_client, repo_full_name, pr_number, commit_sha, result)
 
             result.success = True
             logger.info(
@@ -240,38 +240,28 @@ class ReviewEngine:
             file.content = file.raw_patch  # Fallback to diff only
 
         # Run all 3 analyzers in parallel (skip LLM if tiered strategy says so)
-        ast_task = asyncio.create_task(
-            self._run_ast(file), name=f"ast:{file.file_path}"
+        ast_task = asyncio.create_task(self._run_ast(file), name=f"ast:{file.file_path}")
+        rule_task = asyncio.create_task(self._run_rules(file), name=f"rule:{file.file_path}")
+        llm_task: asyncio.Task[object] = asyncio.create_task(
+            self._run_llm(file) if not skip_llm else asyncio.sleep(0),
+            name=f"llm:{file.file_path}",
         )
-        rule_task = asyncio.create_task(
-            self._run_rules(file), name=f"rule:{file.file_path}"
-        )
-        if skip_llm:
-            llm_task = asyncio.create_task(
-                asyncio.sleep(0), name=f"llm:{file.file_path}"
-            )
-        else:
-            llm_task = asyncio.create_task(
-                self._run_llm(file), name=f"llm:{file.file_path}"
-            )
 
-        results = await asyncio.gather(
-            ast_task, rule_task, llm_task, return_exceptions=True
-        )
+        results = await asyncio.gather(ast_task, rule_task, llm_task, return_exceptions=True)
 
         # Process AST result
         if isinstance(results[0], Exception):
             logger.warning("ast_failed", file=file.file_path, error=str(results[0]))
             report.errors.append(f"ast: {results[0]!s}")
         else:
-            report.ast_report = results[0]
+            report.ast_report = cast("ASTReport", results[0])
 
         # Process rule result
         if isinstance(results[1], Exception):
             logger.warning("rule_failed", file=file.file_path, error=str(results[1]))
             report.errors.append(f"rule: {results[1]!s}")
         else:
-            report.rule_violations = results[1]
+            report.rule_violations = cast("list[RuleViolation]", results[1])
 
         # Process LLM result (graceful degradation)
         if skip_llm:
@@ -281,7 +271,7 @@ class ReviewEngine:
             report.errors.append(f"llm: {results[2]!s}")
             report.llm_result = LLMReviewResult.empty(str(results[2]))
         else:
-            report.llm_result = results[2]
+            report.llm_result = cast("LLMReviewResult", results[2])
 
         return report
 
@@ -353,9 +343,7 @@ class ReviewEngine:
         try:
             # Post summary comment
             if result.pr_comment:
-                await client.post_review_comment(
-                    repo_full_name, pr_number, result.pr_comment
-                )
+                await client.post_review_comment(repo_full_name, pr_number, result.pr_comment)
 
             # Post inline comments via review API
             inline_payload = self.formatter.format_inline_comments_payload(
@@ -384,9 +372,7 @@ class ReviewEngine:
                 if result.aggregated.total_issues == 0 or status == "success"
                 else f"{result.aggregated.critical_count} critical issue(s)"
             )
-            await client.update_review_status(
-                repo_full_name, commit_sha, status, description=desc
-            )
+            await client.update_review_status(repo_full_name, commit_sha, status, description=desc)
 
         except Exception as e:
             logger.error(

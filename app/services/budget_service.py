@@ -6,8 +6,10 @@ Per DESIGN.md §13: prevent OpenAI cost overruns.
 
 from __future__ import annotations
 
-import structlog
 from datetime import date
+from typing import Any
+
+import structlog
 
 from app.core.config import settings
 from app.core.redis import get_redis
@@ -31,9 +33,9 @@ class BudgetService:
     DAILY_TOKENS_KEY = "budget:tokens:{date}"
     PR_TOKENS_KEY = "budget:pr_tokens:{repo}:{pr}:{sha}"
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.daily_limit_usd = settings.llm_budget_daily_usd
-        self.pr_limit_tokens = settings.llm_budget_per_pr_tokens
+        self.pr_limit_tokens = settings.llm_budget_max_tokens_per_pr
 
     async def check_budget(self, repo: str, pr_number: int, commit_sha: str) -> bool:
         """Return True if within budget, raise BudgetExceededError if not."""
@@ -97,7 +99,7 @@ class BudgetService:
             daily_total_cost=cost_usd,
         )
 
-    async def get_daily_usage(self) -> dict:
+    async def get_daily_usage(self) -> dict[str, Any]:
         """Get today's usage snapshot for dashboard."""
         redis = await get_redis()
         today = date.today().isoformat()

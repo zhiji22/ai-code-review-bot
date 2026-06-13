@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import hmac
 import time
 
 import pytest
+from cryptography.fernet import InvalidToken
+from fastapi import HTTPException
 
 
 class TestHMACVerification:
@@ -15,49 +18,58 @@ class TestHMACVerification:
     def test_valid_signature(self) -> None:
         from app.core.security import verify_github_signature
 
-        secret = b"my_webhook_secret"
+        secret = "my_webhook_secret"
         payload = b'{"action":"opened"}'
-        signature = "sha256=" + hmac.new(secret, payload, hashlib.sha256).hexdigest()
+        signature = "sha256=" + hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
 
-        assert verify_github_signature(payload, signature, secret) is True
+        # Should not raise — returns None on success
+        result = verify_github_signature(payload, signature, secret)
+        assert result is None
 
     def test_invalid_signature(self) -> None:
         from app.core.security import verify_github_signature
 
-        secret = b"my_webhook_secret"
+        secret = "my_webhook_secret"
         payload = b'{"action":"opened"}'
         signature = "sha256=invalid_signature_hex"
 
-        assert verify_github_signature(payload, signature, secret) is False
+        with pytest.raises(HTTPException) as exc_info:
+            verify_github_signature(payload, signature, secret)
+        assert exc_info.value.status_code == 403
 
     def test_missing_sha256_prefix(self) -> None:
         from app.core.security import verify_github_signature
 
-        secret = b"secret"
+        secret = "secret"
         payload = b"payload"
-        signature = hmac.new(secret, payload, hashlib.sha256).hexdigest()
+        signature = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
 
-        assert verify_github_signature(payload, signature, secret) is False
+        with pytest.raises(HTTPException) as exc_info:
+            verify_github_signature(payload, signature, secret)
+        assert exc_info.value.status_code == 403
 
     def test_empty_signature(self) -> None:
         from app.core.security import verify_github_signature
 
-        assert verify_github_signature(b"payload", "", b"secret") is False
+        with pytest.raises(HTTPException) as exc_info:
+            verify_github_signature(b"payload", "", "secret")
+        assert exc_info.value.status_code == 403
 
     def test_constant_time_comparison(self) -> None:
         """Verify that timing doesn't leak signature info."""
         from app.core.security import verify_github_signature
 
-        secret = b"secret"
+        secret = "secret"
         payload = b'{"test":true}'
-        valid_sig = "sha256=" + hmac.new(secret, payload, hashlib.sha256).hexdigest()
+        valid_sig = "sha256=" + hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
 
         start = time.monotonic()
         verify_github_signature(payload, valid_sig, secret)
         valid_time = time.monotonic() - start
 
         start = time.monotonic()
-        verify_github_signature(payload, "sha256=" + "a" * 64, secret)
+        with contextlib.suppress(HTTPException):
+            verify_github_signature(payload, "sha256=" + "a" * 64, secret)
         invalid_time = time.monotonic() - start
 
         # Times should be roughly similar (within a generous margin)
@@ -70,7 +82,7 @@ class TestEncryptDecrypt:
     """Tests for Fernet-based secret encryption."""
 
     def test_roundtrip(self) -> None:
-        from app.core.security import encrypt_secret, decrypt_secret
+        from app.core.security import decrypt_secret, encrypt_secret
 
         passphrase = "my_app_secret_key"
         plaintext = "super_secret_webhook_value"
@@ -83,14 +95,14 @@ class TestEncryptDecrypt:
         assert decrypted == plaintext
 
     def test_different_passphrase_fails(self) -> None:
-        from app.core.security import encrypt_secret, decrypt_secret
+        from app.core.security import decrypt_secret, encrypt_secret
 
         ciphertext = encrypt_secret("secret_data", "passphrase1")
-        with pytest.raises(Exception):
+        with pytest.raises(InvalidToken):
             decrypt_secret(ciphertext, "passphrase2")
 
     def test_empty_string(self) -> None:
-        from app.core.security import encrypt_secret, decrypt_secret
+        from app.core.security import decrypt_secret, encrypt_secret
 
         ciphertext = encrypt_secret("", "key")
         assert decrypt_secret(ciphertext, "key") == ""
@@ -100,10 +112,10 @@ class TestIdempotencyKey:
     """Tests for idempotency key generation."""
 
     def test_key_format(self) -> None:
-        from app.core.idempotency import build_idempotency_key
+        from app.core.idempotency import build_webhook_idempotency_key
 
-        key = build_idempotency_key(
-            repo="owner/repo",
+        key = build_webhook_idempotency_key(
+            repo_full_name="owner/repo",
             pr_number=42,
             commit_sha="abc123",
         )
@@ -113,11 +125,11 @@ class TestIdempotencyKey:
         assert key.startswith("webhook:")
 
     def test_different_inputs_different_keys(self) -> None:
-        from app.core.idempotency import build_idempotency_key
+        from app.core.idempotency import build_webhook_idempotency_key
 
-        key1 = build_idempotency_key("a/b", 1, "sha1")
-        key2 = build_idempotency_key("a/b", 2, "sha1")
-        key3 = build_idempotency_key("a/b", 1, "sha2")
+        key1 = build_webhook_idempotency_key("a/b", 1, "sha1")
+        key2 = build_webhook_idempotency_key("a/b", 2, "sha1")
+        key3 = build_webhook_idempotency_key("a/b", 1, "sha2")
 
         assert key1 != key2
         assert key1 != key3

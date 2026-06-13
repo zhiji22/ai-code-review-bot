@@ -6,21 +6,23 @@ Repository service — CRUD operations for repositories.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from sqlalchemy import select, update, func, delete
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete, func, select, update
 
 from app.core.config import settings
 from app.core.security import encrypt_secret
 from app.models.repository import Repository
 from app.schemas.repositories import (
     RepositoryCreateSchema,
-    RepositoryUpdateSchema,
     RepositorySettingsSchema,
+    RepositoryUpdateSchema,
 )
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class RepositoryService:
@@ -56,9 +58,7 @@ class RepositoryService:
     # ------------------------------------------------------------------ read
     async def get_by_id(self, repo_id: int) -> Repository | None:
         """Get repository by primary key."""
-        result = await self.session.execute(
-            select(Repository).where(Repository.id == repo_id)
-        )
+        result = await self.session.execute(select(Repository).where(Repository.id == repo_id))
         return result.scalar_one_or_none()
 
     async def get_by_github_id(self, github_repo_id: int) -> Repository | None:
@@ -83,13 +83,23 @@ class RepositoryService:
     ) -> tuple[list[Repository], int]:
         """List active repositories with total count."""
         stmt = select(Repository).where(Repository.is_active.is_(True))
-        total = await self.session.scalar(
-            select(func.count()).select_from(stmt.subquery())
-        )
+        total = await self.session.scalar(select(func.count()).select_from(stmt.subquery()))
         result = await self.session.execute(
-            stmt.order_by(Repository.created_at.desc())
-            .offset(offset)
-            .limit(limit)
+            stmt.order_by(Repository.created_at.desc()).offset(offset).limit(limit)
+        )
+        return list(result.scalars().all()), int(total or 0)
+
+    async def list_all(
+        self,
+        *,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[Repository], int]:
+        """List all repositories (active and inactive) with total count."""
+        stmt = select(Repository)
+        total = await self.session.scalar(select(func.count()).select_from(stmt.subquery()))
+        result = await self.session.execute(
+            stmt.order_by(Repository.created_at.desc()).offset(offset).limit(limit)
         )
         return list(result.scalars().all()), int(total or 0)
 
@@ -128,20 +138,16 @@ class RepositoryService:
     async def deactivate(self, repo_id: int) -> bool:
         """Soft-delete by setting is_active=False."""
         result = await self.session.execute(
-            update(Repository)
-            .where(Repository.id == repo_id)
-            .values(is_active=False)
+            update(Repository).where(Repository.id == repo_id).values(is_active=False)
         )
         await self.session.commit()
-        return result.rowcount > 0  # type: ignore[union-attr]
+        return result.rowcount > 0
 
     async def delete(self, repo_id: int) -> bool:
         """Hard-delete repository."""
-        result = await self.session.execute(
-            delete(Repository).where(Repository.id == repo_id)
-        )
+        result = await self.session.execute(delete(Repository).where(Repository.id == repo_id))
         await self.session.commit()
-        return result.rowcount > 0  # type: ignore[union-attr]
+        return result.rowcount > 0
 
     # ------------------------------------------------------------------ helpers
     async def touch_review(self, repo_id: int) -> None:
@@ -150,7 +156,7 @@ class RepositoryService:
             update(Repository)
             .where(Repository.id == repo_id)
             .values(
-                last_review_at=datetime.now(timezone.utc),
+                last_review_at=datetime.now(UTC),
                 total_reviews=Repository.total_reviews + 1,
             )
         )

@@ -1,4 +1,7 @@
 """Code embedding model — pgvector storage for semantic code search."""
+
+from typing import Any
+
 from sqlalchemy import BigInteger, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -30,11 +33,11 @@ class CodeEmbedding(Base, IdMixin, TimestampMixin):
     language: Mapped[str | None] = mapped_column(String(50), nullable=True)
     chunk_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     embedding = (
-        mapped_column(Vector(EMBEDDING_DIM), nullable=True) if Vector else mapped_column(
-            Text, nullable=True
-        )
+        mapped_column(Vector(EMBEDDING_DIM), nullable=True)
+        if Vector
+        else mapped_column(Text, nullable=True)
     )
-    metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
+    metadata_: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
 
     def __repr__(self) -> str:
         return f"<CodeEmbedding {self.file_path}:{self.start_line}-{self.end_line}>"

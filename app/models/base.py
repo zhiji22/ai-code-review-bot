@@ -1,6 +1,7 @@
 """SQLAlchemy declarative base with common columns."""
+
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from sqlalchemy import BigInteger, DateTime, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -9,7 +10,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 class Base(DeclarativeBase):
     """Declarative base for all models."""
 
-    metadata_naming_convention: dict[str, str] = {
+    metadata_naming_convention: ClassVar[dict[str, str]] = {
         "ix": "ix_%(column_0_label)s",
         "uq": "uq_%(table_name)s_%(column_0_name)s",
         "ck": "ck_%(table_name)s_%(constraint_name)s",

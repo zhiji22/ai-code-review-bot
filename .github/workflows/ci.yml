@@ -42,7 +42,7 @@ jobs:
         run: ruff format --check app/ tests/
 
       - name: Mypy type check
-        run: mypy app/ --ignore-missing-imports --no-error-summary || true
+        run: mypy app/ --ignore-missing-imports --no-error-summary
 
   # ─────────────────────────── Backend tests ──────────────────────────
   backend-test:
@@ -86,6 +86,15 @@ jobs:
       ENVIRONMENT: test
       SENTRY_DSN: ""
 
+      SECRET_KEY: test-secret-key-for-ci-not-real-32ch
+      GITHUB_APP_ID: "123456"
+      GITHUB_CLIENT_ID: test-client-id
+      GITHUB_CLIENT_SECRET: test-client-secret
+      GITHUB_APP_PRIVATE_KEY_PATH: ""
+      OPENAI_API_BASE: https://dashscope.aliyuncs.com/compatible-mode/v1
+      OPENAI_MODEL: qwen-plus
+      CORS_ORIGINS: http://localhost:3000
+
     steps:
       - uses: actions/checkout@v4
 
@@ -105,10 +114,10 @@ jobs:
       - name: Run migrations
         env:
           DATABASE_URL: postgresql+asyncpg://review:review@localhost:5432/review_test
-        run: alembic upgrade head || true
+        run: alembic upgrade head
 
       - name: Run tests
-        run: pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing || true
+        run: pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage
         if: always()
@@ -138,7 +147,7 @@ jobs:
         run: npm ci || npm install
 
       - name: TypeScript check
-        run: npx tsc --noEmit || true
+        run: npx tsc --noEmit
 
       - name: Build
         run: npm run build
@@ -192,7 +201,7 @@ jobs:
       - name: pip-audit (Python deps)
         run: |
           pip install pip-audit
-          pip-audit -r requirements.txt || true
+          pip-audit -r requirements.txt
 
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@master

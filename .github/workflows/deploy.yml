@@ -86,7 +86,7 @@ jobs:
 
             # Pull latest images and restart services
             docker compose pull
-            docker compose build --no-cache backend frontend
+            docker compose pull backend frontend
 
             # Run database migrations
             docker compose run --rm backend alembic upgrade head

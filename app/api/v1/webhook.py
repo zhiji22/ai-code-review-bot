@@ -7,6 +7,7 @@ Per DESIGN.md §3: Webhook Handler with HMAC verification + idempotency + queue.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Header, Request, status
@@ -16,7 +17,6 @@ from app.core.config import get_settings
 from app.core.idempotency import (
     build_webhook_idempotency_key,
     check_idempotency,
-    release_idempotency,
 )
 from app.core.security import verify_webhook
 
@@ -109,7 +109,7 @@ async def receive_webhook(
     }
 
 
-def _extract_installation_id(payload: dict) -> int | None:
+def _extract_installation_id(payload: dict[str, Any]) -> int | None:
     """Extract installation ID from webhook payload."""
-    installation = payload.get("installation", {})
+    installation: dict[str, Any] = payload.get("installation", {})
     return installation.get("id")

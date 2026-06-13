@@ -55,8 +55,8 @@ class CategoryBreakdownSchema(BaseModel):
 
 
 __all__ = [
+    "CategoryBreakdownSchema",
     "OverviewStatsSchema",
     "TrendPointSchema",
     "TrendStatsSchema",
-    "CategoryBreakdownSchema",
 ]

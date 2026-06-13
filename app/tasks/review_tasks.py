@@ -7,7 +7,7 @@ Per DESIGN.md §3: Review Engine runs as Celery task with retry/timeout/backoff.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, ClassVar
 
 import httpx
 import structlog
@@ -19,23 +19,27 @@ from app.tasks.celery_app import celery_app
 logger = structlog.get_logger(__name__)
 
 
-class ReviewTask(Task):
+class ReviewTask(Task):  # type: ignore[misc]
     """Base task class with custom error handling."""
 
-    autoretry_for = (httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException)
-    retry_kwargs = {"max_retries": 3}
-    retry_backoff = True  # Exponential backoff
-    retry_backoff_max = 300  # 5 minutes
-    retry_jitter = True
+    autoretry_for: ClassVar[tuple[type[Exception], ...]] = (
+        httpx.HTTPStatusError,
+        httpx.ConnectError,
+        httpx.TimeoutException,
+    )
+    retry_kwargs: ClassVar[dict[str, Any]] = {"max_retries": 3}
+    retry_backoff: ClassVar[bool] = True  # Exponential backoff
+    retry_backoff_max: ClassVar[int] = 300  # 5 minutes
+    retry_jitter: ClassVar[bool] = True
 
 
-@celery_app.task(
+@celery_app.task(  # type: ignore[misc]
     base=ReviewTask,
     name="app.tasks.review_tasks.queue_pr_review",
     bind=True,
 )
 def queue_pr_review(
-    self,
+    self: ReviewTask,
     repo_full_name: str,
     pr_number: int,
     commit_sha: str,
@@ -201,28 +205,28 @@ async def _execute_review_pipeline(
             pr_number=pr_number,
         )
 
-    return {
-        "success": result.success,
-        "repo_full_name": result.repo_full_name,
-        "pr_number": result.pr_number,
-        "commit_sha": result.commit_sha,
-        "error": result.error,
-        "overall_score": result.aggregated.scores.overall,
-        "total_issues": result.aggregated.total_issues,
-        "critical_count": result.aggregated.critical_count,
-        "inline_comments_count": result.inline_comments_count,
-    }
+        return {
+            "success": result.success,
+            "repo_full_name": result.repo_full_name,
+            "pr_number": result.pr_number,
+            "commit_sha": result.commit_sha,
+            "error": result.error,
+            "overall_score": result.aggregated.scores.overall,
+            "total_issues": result.aggregated.total_issues,
+            "critical_count": result.aggregated.critical_count,
+            "inline_comments_count": result.inline_comments_count,
+        }
 
 
-@celery_app.task(name="app.tasks.review_tasks.cleanup_expired_keys")
-def cleanup_expired_keys() -> dict[str, int]:
+@celery_app.task(name="app.tasks.review_tasks.cleanup_expired_keys")  # type: ignore[misc]
+def cleanup_expired_keys() -> dict[str, Any]:
     """Clean up expired idempotency/rate-limit keys (called by beat)."""
     logger.info("cleanup_task_running")
     # Redis handles TTL automatically; this is a no-op placeholder
     return {"status": "ok", "cleaned": 0}
 
 
-@celery_app.task(name="app.tasks.review_tasks.reset_daily_budget")
+@celery_app.task(name="app.tasks.review_tasks.reset_daily_budget")  # type: ignore[misc]
 def reset_daily_budget() -> dict[str, str]:
     """Reset daily LLM budget counter (called by beat)."""
     logger.info("daily_budget_reset")

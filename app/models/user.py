@@ -1,7 +1,8 @@
 """User model — GitHub OAuth users."""
+
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, String, Text
+from sqlalchemy import BigInteger, DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, IdMixin, TimestampMixin
@@ -21,9 +22,7 @@ class User(Base, IdMixin, TimestampMixin):
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
     is_admin: Mapped[bool] = mapped_column(default=False, nullable=False)
-    last_login_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def __repr__(self) -> str:
         return f"<User {self.username}>"

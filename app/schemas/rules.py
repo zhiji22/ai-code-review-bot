@@ -73,8 +73,8 @@ class RuleUpdateSchema(BaseModel):
 
 
 __all__ = [
-    "RuleSchema",
-    "RuleListSchema",
     "RuleCreateSchema",
+    "RuleListSchema",
+    "RuleSchema",
     "RuleUpdateSchema",
 ]

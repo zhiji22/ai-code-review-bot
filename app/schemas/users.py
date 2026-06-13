@@ -60,9 +60,9 @@ class GitHubLoginResponseSchema(BaseModel):
 
 
 __all__ = [
-    "UserSchema",
-    "TokenSchema",
-    "TokenRefreshSchema",
-    "GitHubLoginSchema",
     "GitHubLoginResponseSchema",
+    "GitHubLoginSchema",
+    "TokenRefreshSchema",
+    "TokenSchema",
+    "UserSchema",
 ]

@@ -6,8 +6,8 @@ Per DESIGN.md §5: async SQLAlchemy 2.0 + connection pool.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -17,6 +17,9 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import get_settings
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None

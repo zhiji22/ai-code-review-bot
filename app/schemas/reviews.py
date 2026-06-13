@@ -6,7 +6,6 @@ Per DESIGN.md §6: unified {data, meta} envelope, cursor pagination.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -137,9 +136,9 @@ class ReviewFiltersSchema(BaseModel):
 
 __all__ = [
     "ReviewCommentSchema",
-    "ReviewScoresSchema",
-    "ReviewSchema",
-    "ReviewListSchema",
     "ReviewCreateSchema",
     "ReviewFiltersSchema",
+    "ReviewListSchema",
+    "ReviewSchema",
+    "ReviewScoresSchema",
 ]

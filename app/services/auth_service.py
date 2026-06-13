@@ -8,16 +8,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, TypedDict
+import os
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import httpx
 import jwt
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.user import User
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +43,7 @@ class AuthService:
     @staticmethod
     def create_access_token(user_id: int, extra: dict[str, Any] | None = None) -> str:
         """Create short-lived access token (15min per §15)."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload = {
             "sub": str(user_id),
             "iat": now,
@@ -53,7 +56,7 @@ class AuthService:
     @staticmethod
     def create_refresh_token(user_id: int) -> str:
         """Create long-lived refresh token (7d per §15)."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload = {
             "sub": str(user_id),
             "iat": now,
@@ -65,7 +68,7 @@ class AuthService:
     @staticmethod
     def decode_token(token: str) -> dict[str, Any]:
         """Decode + verify JWT. Raises jwt.PyJWTError on invalid."""
-        return jwt.decode(
+        return jwt.decode(  # type: ignore[no-any-return]
             token,
             settings.secret_key,
             algorithms=["HS256"],
@@ -159,9 +162,7 @@ class AuthService:
     ) -> User:
         """Create or update user from GitHub data."""
         github_id = gh_data["id"]
-        result = await self.session.execute(
-            select(User).where(User.github_id == github_id)
-        )
+        result = await self.session.execute(select(User).where(User.github_id == github_id))
         user = result.scalar_one_or_none()
 
         if user:
@@ -174,7 +175,7 @@ class AuthService:
             user.company = gh_data.get("company") or user.company
             user.location = gh_data.get("location") or user.location
             user.github_access_token = access_token
-            user.last_login_at = datetime.now(timezone.utc)
+            user.last_login_at = datetime.now(UTC)
         else:
             # Create new
             user = User(
@@ -187,7 +188,7 @@ class AuthService:
                 company=gh_data.get("company"),
                 location=gh_data.get("location"),
                 github_access_token=access_token,
-                last_login_at=datetime.now(timezone.utc),
+                last_login_at=datetime.now(UTC),
             )
             self.session.add(user)
 
@@ -197,13 +198,9 @@ class AuthService:
 
     # ------------------------------------------------------------------ user helpers
     async def get_user_by_id(self, user_id: int) -> User | None:
-        result = await self.session.execute(
-            select(User).where(User.id == user_id)
-        )
+        result = await self.session.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
 
     async def get_user_by_github_id(self, github_id: int) -> User | None:
-        result = await self.session.execute(
-            select(User).where(User.github_id == github_id)
-        )
+        result = await self.session.execute(select(User).where(User.github_id == github_id))
         return result.scalar_one_or_none()

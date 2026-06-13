@@ -8,16 +8,16 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import numpy as np
-from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 from app.core.config import settings
 from app.models.code_embedding import CodeEmbedding
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +64,7 @@ class CodeChunk:
         )
 
 
-def chunk_code(
-    file_path: str, code: str, language: str = "unknown"
-) -> list[CodeChunk]:
+def chunk_code(file_path: str, code: str, language: str = "unknown") -> list[CodeChunk]:
     """Split code into overlapping line-based chunks.
 
     Args:
@@ -164,16 +162,11 @@ class EmbeddingService:
         await self._store_embeddings(repository_id, result)
         return result
 
-    async def _store_embeddings(
-        self, repository_id: int, result: EmbeddingResult
-    ) -> None:
+    async def _store_embeddings(self, repository_id: int, result: EmbeddingResult) -> None:
         """Replace existing embeddings for the file with new ones."""
         # Delete existing chunks for this file in this repo
         await self.session.execute(
-            text(
-                "DELETE FROM code_embeddings "
-                "WHERE repository_id = :rid AND file_path = :fp"
-            ),
+            text("DELETE FROM code_embeddings WHERE repository_id = :rid AND file_path = :fp"),
             {"rid": repository_id, "fp": result.file_path},
         )
         for chunk, vec in zip(result.chunks, result.embeddings, strict=True):
@@ -244,9 +237,7 @@ class EmbeddingService:
             "qvec": str(query_vec),
             "k": top_k,
         }
-        rows = (
-            await self.session.execute(sql, params)
-        ).mappings().all()
+        rows = (await self.session.execute(sql, params)).mappings().all()
 
         results = []
         for row in rows:
@@ -273,10 +264,7 @@ class EmbeddingService:
     async def delete_for_repository(self, repository_id: int) -> int:
         """Delete all embeddings for a repository."""
         result = await self.session.execute(
-            text(
-                "DELETE FROM code_embeddings WHERE repository_id = :rid "
-                "RETURNING id"
-            ),
+            text("DELETE FROM code_embeddings WHERE repository_id = :rid RETURNING id"),
             {"rid": repository_id},
         )
         count = len(result.fetchall())

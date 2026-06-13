@@ -6,10 +6,9 @@ Uses httpx for async operations with GitHub App authentication.
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +36,7 @@ class FileDiff:
     @property
     def is_code_file(self) -> bool:
         """Check if this file is a supported code file."""
-        CODE_EXTENSIONS = {
+        code_extensions = {
             ".py": "python",
             ".js": "javascript",
             ".ts": "typescript",
@@ -56,7 +55,7 @@ class FileDiff:
         from pathlib import Path
 
         ext = Path(self.file_path).suffix.lower()
-        return ext in CODE_EXTENSIONS
+        return ext in code_extensions
 
     @property
     def lines_of_code(self) -> int:
@@ -110,14 +109,10 @@ class GitHubClient:
             )
         return self._http
 
-    async def get_pr_info(
-        self, repo_full_name: str, pr_number: int
-    ) -> PRInfo:
+    async def get_pr_info(self, repo_full_name: str, pr_number: int) -> PRInfo:
         """Fetch PR metadata."""
         client = await self._ensure_client()
-        resp = await client.get(
-            f"/repos/{repo_full_name}/pulls/{pr_number}"
-        )
+        resp = await client.get(f"/repos/{repo_full_name}/pulls/{pr_number}")
         resp.raise_for_status()
         data = resp.json()
         return PRInfo(
@@ -132,9 +127,7 @@ class GitHubClient:
             changed_files=data["changed_files"],
         )
 
-    async def get_pr_files(
-        self, repo_full_name: str, pr_number: int
-    ) -> list[FileDiff]:
+    async def get_pr_files(self, repo_full_name: str, pr_number: int) -> list[FileDiff]:
         """Fetch all changed files in a PR with diffs."""
         client = await self._ensure_client()
         files: list[FileDiff] = []
@@ -168,9 +161,7 @@ class GitHubClient:
 
         return files
 
-    async def get_file_content(
-        self, repo_full_name: str, file_path: str, ref: str
-    ) -> str:
+    async def get_file_content(self, repo_full_name: str, file_path: str, ref: str) -> str:
         """Fetch raw file content at a specific ref."""
         client = await self._ensure_client()
         resp = await client.get(
@@ -181,7 +172,7 @@ class GitHubClient:
         data = resp.json()
         if data.get("encoding") == "base64":
             return base64.b64decode(data["content"]).decode("utf-8", errors="replace")
-        return data.get("content", "")
+        return data.get("content", "")  # type: ignore[no-any-return]
 
     async def post_review_comment(
         self,
@@ -196,7 +187,7 @@ class GitHubClient:
             json={"body": body},
         )
         resp.raise_for_status()
-        return resp.json()
+        return resp.json()  # type: ignore[no-any-return]
 
     async def post_inline_comments(
         self,
@@ -224,7 +215,7 @@ class GitHubClient:
             json=payload,
         )
         resp.raise_for_status()
-        return resp.json()
+        return resp.json()  # type: ignore[no-any-return]
 
     async def update_review_status(
         self,
@@ -249,7 +240,7 @@ class GitHubClient:
             json=payload,
         )
         resp.raise_for_status()
-        return resp.json()
+        return resp.json()  # type: ignore[no-any-return]
 
     async def check_rate_limit(self) -> dict[str, int]:
         """Check current GitHub API rate limit."""
@@ -273,7 +264,7 @@ def _detect_language(file_path: str) -> str:
     """Detect programming language from file extension."""
     from pathlib import Path
 
-    LANG_MAP = {
+    lang_map = {
         ".py": "python",
         ".js": "javascript",
         ".jsx": "javascript",
@@ -294,7 +285,7 @@ def _detect_language(file_path: str) -> str:
         ".kt": "kotlin",
     }
     ext = Path(file_path).suffix.lower()
-    return LANG_MAP.get(ext, "unknown")
+    return lang_map.get(ext, "unknown")
 
 
 # --- GitHub App Authentication ---
@@ -341,14 +332,12 @@ async def _get_installation_token(installation_id: int) -> str:
         headers={**_APP_HEADERS, "Authorization": f"Bearer {app_jwt}"},
         timeout=30.0,
     ) as client:
-        resp = await client.post(
-            f"/app/installations/{installation_id}/access_tokens"
-        )
+        resp = await client.post(f"/app/installations/{installation_id}/access_tokens")
         resp.raise_for_status()
         token = resp.json()["token"]
 
     _token_cache[installation_id] = (token, time.time())
-    return token
+    return token  # type: ignore[no-any-return]
 
 
 async def _list_installations() -> list[dict[str, Any]]:
@@ -361,7 +350,7 @@ async def _list_installations() -> list[dict[str, Any]]:
     ) as client:
         resp = await client.get("/app/installations")
         resp.raise_for_status()
-        return resp.json()
+        return resp.json()  # type: ignore[no-any-return]
 
 
 async def get_github_client(installation_id: int | None = None) -> GitHubClient:
