@@ -82,11 +82,10 @@ jobs:
             fi
 
             # Extract new code
-            tar xzf /tmp/deploy.tar.gz -C .
+            tar xzf /tmp/deploy.tar.gz -C . --overwrite
 
             # Pull latest images and restart services
             docker compose pull
-            docker compose pull backend frontend
 
             # Run database migrations
             docker compose run --rm backend alembic upgrade head
