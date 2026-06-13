@@ -41,6 +41,43 @@ ISSUE_TOLERANCE_PER_100_LOC = {
     "info": 10,
 }
 
+# --- LLM Cost Constants (USD per 1M tokens) ---
+# Pricing for common models (as of 2024)
+LLM_PRICING_PER_1M_TOKENS = {
+    # Qwen models (Alibaba DashScope)
+    "qwen-plus": {"prompt": 0.004, "completion": 0.012},
+    "qwen-turbo": {"prompt": 0.002, "completion": 0.006},
+    "qwen-max": {"prompt": 0.02, "completion": 0.06},
+    # OpenAI models
+    "gpt-4o": {"prompt": 2.50, "completion": 10.00},
+    "gpt-4o-mini": {"prompt": 0.15, "completion": 0.60},
+    "gpt-4-turbo": {"prompt": 10.00, "completion": 30.00},
+    "gpt-3.5-turbo": {"prompt": 0.50, "completion": 1.50},
+    # Default fallback
+    "default": {"prompt": 0.01, "completion": 0.03},
+}
+
+
+def calculate_llm_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
+    """Calculate LLM API cost in USD.
+
+    Args:
+        model: Model name (e.g., "qwen-plus", "gpt-4o")
+        prompt_tokens: Number of prompt tokens
+        completion_tokens: Number of completion tokens
+
+    Returns:
+        Cost in USD
+    """
+    # Normalize model name (handle versioned models like "gpt-4o-2024-05-13")
+    model_base = model.split("-2024")[0].split("-2025")[0] if "-" in model else model
+    pricing = LLM_PRICING_PER_1M_TOKENS.get(model_base, LLM_PRICING_PER_1M_TOKENS["default"])
+
+    prompt_cost = (prompt_tokens / 1_000_000) * pricing["prompt"]
+    completion_cost = (completion_tokens / 1_000_000) * pricing["completion"]
+
+    return round(prompt_cost + completion_cost, 6)
+
 
 # --- Unified Issue Model ---
 
@@ -74,6 +111,7 @@ class ReviewScores:
     security: int = 100
     performance: int = 100
     maintainability: int = 100
+    style: int = 100
 
 
 @dataclass
@@ -130,6 +168,8 @@ class ResultAggregator:
         total_loc = 0
         llm_summary_parts: list[str] = []
         total_llm_tokens = 0
+        total_llm_cost = 0.0
+        llm_model = ""
 
         for fr in file_results:
             file_path = fr.get("file_path", "")
@@ -203,6 +243,16 @@ class ResultAggregator:
                 llm_summary_parts.append(f"**{file_path}**: {llm_result.summary}")
             total_llm_tokens += llm_result.total_tokens
 
+            # Calculate LLM cost if we have token info and model
+            if llm_result.total_tokens > 0 and llm_result.model:
+                if not llm_model:
+                    llm_model = llm_result.model
+                total_llm_cost += calculate_llm_cost(
+                    llm_result.model,
+                    llm_result.prompt_tokens,
+                    llm_result.completion_tokens,
+                )
+
         # Deduplicate
         deduped = _deduplicate(all_issues)
 
@@ -224,6 +274,7 @@ class ResultAggregator:
             lines_of_code=total_loc,
             llm_summary="\n".join(llm_summary_parts),
             llm_tokens=total_llm_tokens,
+            llm_cost_usd=total_llm_cost,
         )
 
 
@@ -267,10 +318,12 @@ def calculate_score(
     base = 100
     loc_factor = max(lines_of_code / 100, 1)
 
+    # Include all categories: security, performance, maintainability, style
     categories: dict[str, list[UnifiedIssue]] = {
         "security": [],
         "performance": [],
         "maintainability": [],
+        "style": [],
     }
 
     for issue in issues:
@@ -294,13 +347,18 @@ def calculate_score(
     sec = category_score(categories["security"])
     perf = category_score(categories["performance"])
     maint = category_score(categories["maintainability"])
-    overall = int(0.4 * sec + 0.3 * perf + 0.3 * maint)
+    style = category_score(categories["style"])
+
+    # Overall score: weighted average of all categories
+    # security (40%), performance (25%), maintainability (25%), style (10%)
+    overall = int(0.4 * sec + 0.25 * perf + 0.25 * maint + 0.1 * style)
 
     return ReviewScores(
         overall=min(100, max(0, overall)),
         security=sec,
         performance=perf,
         maintainability=maint,
+        style=style,
     )
 
 

@@ -39,6 +39,7 @@ class Review(Base, IdMixin, TimestampMixin):
     security_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     performance_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     maintainability_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    style_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     files_reviewed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     files_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     lines_of_code: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -87,6 +88,10 @@ class Review(Base, IdMixin, TimestampMixin):
         CheckConstraint(
             "maintainability_score >= 0 AND maintainability_score <= 100",
             name="ck_reviews_maintainability_score",
+        ),
+        CheckConstraint(
+            "style_score >= 0 AND style_score <= 100",
+            name="ck_reviews_style_score",
         ),
     )
 

@@ -14,6 +14,8 @@ import structlog
 from celery import Task
 from sqlalchemy import select
 
+from app.analyzers.result_aggregator import calculate_llm_cost
+from app.models.llm_usage import LLMUsage
 from app.tasks.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
@@ -169,6 +171,7 @@ async def _execute_review_pipeline(
                 security_score=agg.scores.security,
                 performance_score=agg.scores.performance,
                 maintainability_score=agg.scores.maintainability,
+                style_score=agg.scores.style,
                 critical_count=agg.critical_count,
                 warning_count=agg.warning_count,
                 info_count=agg.info_count,
@@ -198,6 +201,42 @@ async def _execute_review_pipeline(
             ]
             if comments_data:
                 await service.save_comments(review.id, comments_data)
+
+            # Save LLM usage records for each file
+            llm_usage_records = []
+            for fr in result.file_reports:
+                llm_res = fr.llm_result
+                # Use same condition as aggregator: require both tokens and model
+                if llm_res.total_tokens > 0 and llm_res.model:
+                    cost_usd = calculate_llm_cost(
+                        llm_res.model,
+                        llm_res.prompt_tokens,
+                        llm_res.completion_tokens,
+                    )
+                    llm_usage_records.append(
+                        LLMUsage(
+                            review_id=review.id,
+                            repository_id=repo.id,
+                            model=llm_res.model,
+                            provider="dashscope" if "qwen" in llm_res.model.lower() else "openai",
+                            prompt_tokens=llm_res.prompt_tokens,
+                            completion_tokens=llm_res.completion_tokens,
+                            total_tokens=llm_res.total_tokens,
+                            cost_usd=cost_usd,
+                            cached=llm_res.cached,
+                            file_path=fr.file_path,
+                            success=not bool(llm_res.error),
+                            error_message=llm_res.error if llm_res.error else None,
+                        )
+                    )
+            if llm_usage_records:
+                session.add_all(llm_usage_records)
+                logger.info(
+                    "llm_usage_saved",
+                    review_id=review.id,
+                    records=len(llm_usage_records),
+                    total_tokens=sum(r.total_tokens for r in llm_usage_records),
+                )
 
             logger.info(
                 "review_persisted",
