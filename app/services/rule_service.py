@@ -42,8 +42,12 @@ class RuleService:
             repository_id=data.repository_id,
         )
         self.session.add(rule)
-        await self.session.commit()
-        await self.session.refresh(rule)
+        try:
+            await self.session.commit()
+            await self.session.refresh(rule)
+        except Exception:
+            await self.session.rollback()
+            raise
         return rule
 
     # ------------------------------------------------------------------ read
