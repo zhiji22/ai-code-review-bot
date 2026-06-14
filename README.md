@@ -1,8 +1,8 @@
 # AI Code Review Bot
 
-> **Automated Pull Request review powered by AST analysis, rule engine, and LLM (GPT-4o).**
+> **基于 AST 分析、规则引擎和 LLM (GPT-4o) 的自动化 Pull Request 审查工具。**
 >
-> Targets: 40% less manual review time, >80% security detection rate, <10s/file review time.
+> 目标：减少 40% 手动审查时间，安全检测率 >80%，审查速度 <10秒/文件。
 
 [![CI](https://github.com/your-org/ai-code-review-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/ai-code-review-bot/actions/workflows/ci.yml)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
@@ -11,66 +11,66 @@
 
 ---
 
-## Features
+## 功能特性
 
-- **Multi-layer analysis**: AST (tree-sitter) + Rule Engine (24 built-in rules) + LLM (GPT-4o)
-- **Real-time PR review**: Triggered via GitHub Webhook, results posted as comments + inline annotations
-- **Security-first**: SQL injection, XSS, hardcoded secrets, weak crypto, and 6+ more security checks
-- **Performance & style**: N+1 queries, complexity, nesting depth, TODO/FIXME tracking
-- **Multi-language**: Python, JavaScript, TypeScript, Java, Go, Rust
-- **Smart scoring**: Multi-dimensional (security/performance/maintainability) with confidence-weighted aggregation
-- **Budget-aware**: Daily LLM cost limits + per-PR token caps
-- **Dashboard**: React frontend with review history, trends, and repository management
-- **Enterprise-ready**: pgvector semantic search, Prometheus monitoring, Sentry error tracking, CI/CD
+- **多层分析**：AST (tree-sitter) + 规则引擎（24 条内置规则）+ LLM (GPT-4o)
+- **实时 PR 审查**：通过 GitHub Webhook 触发，结果以评论 + 内联注释形式发布
+- **安全优先**：SQL 注入、XSS、硬编码密钥、弱加密等 6+ 种安全检查
+- **性能与风格**：N+1 查询、复杂度、嵌套深度、TODO/FIXME 追踪
+- **多语言支持**：Python、JavaScript、TypeScript、Java、Go、Rust
+- **智能评分**：多维度（安全/性能/可维护性）置信度加权聚合
+- **预算控制**：每日 LLM 成本限制 + 单 PR Token 上限
+- **仪表盘**：React 前端，包含审查历史、趋势和仓库管理
+- **企业级就绪**：pgvector 语义搜索、Prometheus 监控、Sentry 错误追踪、CI/CD
 
 ---
 
-## Architecture
+## 系统架构
 
 ```
 GitHub PR → Nginx (SSL) → FastAPI → Celery Workers → Pipeline → GitHub API
                                            │
                               ┌────────────┼────────────┐
                               ▼            ▼            ▼
-                          AST         Rule Engine      LLM
-                       (tree-sitter)  (24 rules)   (GPT-4o)
+                          AST         规则引擎       LLM
+                       (tree-sitter)  (24 条规则)  (GPT-4o)
                               └────────────┬────────────┘
                                            ▼
-                                   Result Aggregator
-                                   (dedup + score)
+                                   结果聚合器
+                                   (去重 + 评分)
                                            │
                               ┌────────────┴────────────┐
                               ▼                         ▼
-                        PostgreSQL                 Redis Cache
-                      (7 tables +                  (4 DBs:
+                        PostgreSQL                 Redis 缓存
+                      (7 张表 +                   (4 个 DB：
                        pgvector)                   broker/cache/
                                                    idempotency/
                                                    budget)
 ```
 
-**Tech Stack**:
-| Layer | Technology |
-|-------|-----------|
-| Backend | FastAPI 0.115+, Celery 5.4+, SQLAlchemy 2.0 async |
-| Database | PostgreSQL 16 + pgvector 0.7+ |
-| Cache/Queue | Redis 7.2+ (4 logical databases) |
+**技术栈**：
+| 层级 | 技术 |
+|------|------|
+| 后端 | FastAPI 0.115+, Celery 5.4+, SQLAlchemy 2.0 async |
+| 数据库 | PostgreSQL 16 + pgvector 0.7+ |
+| 缓存/队列 | Redis 7.2+ (4 个逻辑数据库) |
 | AST | tree-sitter 0.23+ (Python, JS, TS, Java, Go, Rust) |
-| LLM | OpenAI GPT-4o (structured JSON output, Redis cache) |
-| Frontend | React 18, TypeScript 5, Vite, Tailwind, shadcn/ui |
-| Monitoring | Prometheus + Grafana + Sentry |
-| Infrastructure | Docker Compose (10 services), Nginx SSL reverse proxy |
+| LLM | OpenAI GPT-4o (结构化 JSON 输出, Redis 缓存) |
+| 前端 | React 18, TypeScript 5, Vite, Tailwind, shadcn/ui |
+| 监控 | Prometheus + Grafana + Sentry |
+| 基础设施 | Docker Compose (10 个服务), Nginx SSL 反向代理 |
 
 ---
 
-## Quick Start
+## 快速开始
 
-### Prerequisites
+### 前置条件
 
 - Docker & Docker Compose v2+
-- GitHub App (for webhook integration)
-- OpenAI API key
+- GitHub App（用于 webhook 集成）
+- OpenAI API 密钥
 
-### 1. Clone & Configure
+### 1. 克隆与配置
 
 ```bash
 git clone https://github.com/your-org/ai-code-review-bot.git
@@ -78,7 +78,7 @@ cd ai-code-review-bot
 cp .env.example .env
 ```
 
-Edit `.env` with your credentials:
+编辑 `.env` 文件，填入你的凭证：
 
 ```env
 APP_SECRET=your-32-char-secret-key-here
@@ -86,204 +86,204 @@ GITHUB_APP_ID=123456
 GITHUB_PRIVATE_KEY_PATH=/path/to/private-key.pem
 GITHUB_WEBHOOK_SECRET=your_webhook_secret
 OPENAI_API_KEY=sk-your-openai-key
-SENTRY_DSN=https://xxx@sentry.io/xxx  # Optional
+SENTRY_DSN=https://xxx@sentry.io/xxx  # 可选
 ```
 
-### 2. Launch with Docker
+### 2. 使用 Docker 启动
 
 ```bash
-# Build and start all services
+# 构建并启动所有服务
 docker compose up -d --build
 
-# Run database migrations
+# 运行数据库迁移
 docker compose exec backend alembic upgrade head
 
-# Check health
+# 检查健康状态
 curl http://localhost/health
 ```
 
-**Services exposed**:
-| Service | Port | URL |
-|---------|------|-----|
-| Frontend | 80 | http://localhost |
-| API | 80 (via Nginx) | http://localhost/api/v1 |
-| API Docs | 80 (debug only) | http://localhost/docs |
+**服务端口**：
+| 服务 | 端口 | URL |
+|------|------|-----|
+| 前端 | 80 | http://localhost |
+| API | 80 (通过 Nginx) | http://localhost/api/v1 |
+| API 文档 | 80 (仅调试模式) | http://localhost/docs |
 | Flower (Celery) | 5555 | http://localhost:5555 |
 | Grafana | 3001 | http://localhost:3001 |
 | Prometheus | 9090 | http://localhost:9090 |
 
-### 3. GitHub App Setup
+### 3. GitHub App 配置
 
-1. Go to **GitHub Settings → Developer settings → GitHub Apps → New GitHub App**
-2. Set **Webhook URL** to `https://your-domain.com/api/v1/webhook`
-3. Set **Webhook secret** (same as `GITHUB_WEBHOOK_SECRET` in `.env`)
-4. Subscribe to **Pull request** events
-5. Grant permissions: `contents:read`, `pull_requests:write`, `statuses:write`, `checks:write`
-6. Generate private key, save as `.keys/github-app.pem`
+1. 进入 **GitHub Settings → Developer settings → GitHub Apps → New GitHub App**
+2. 设置 **Webhook URL** 为 `https://your-domain.com/api/v1/webhook`
+3. 设置 **Webhook secret**（与 `.env` 中的 `GITHUB_WEBHOOK_SECRET` 相同）
+4. 订阅 **Pull request** 事件
+5. 授权权限：`contents:read`, `pull_requests:write`, `statuses:write`, `checks:write`
+6. 生成私钥，保存为 `.keys/github-app.pem`
 
 ---
 
-## Development
+## 开发指南
 
-### Local Setup (without Docker)
+### 本地开发（不使用 Docker）
 
 ```bash
-# Backend
+# 后端
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# Start PostgreSQL + Redis (or use docker compose up postgres redis)
+# 启动 PostgreSQL + Redis（或使用 docker compose up postgres redis）
 
-# Run migrations
+# 运行迁移
 alembic upgrade head
 
-# Start API (hot reload)
+# 启动 API（热重载）
 uvicorn app.main:app --reload --port 8000
 
-# Start Celery worker (separate terminal)
+# 启动 Celery worker（单独终端）
 celery -A app.tasks.celery_app worker -l info
 
-# Start Celery beat (separate terminal)
+# 启动 Celery beat（单独终端）
 celery -A app.tasks.celery_app beat -l info
 ```
 
-### Frontend Development
+### 前端开发
 
 ```bash
 cd frontend
 npm install
-npm run dev  # Vite dev server at localhost:5173
+npm run dev  # Vite 开发服务器，地址 localhost:5173
 ```
 
-### Testing
+### 测试
 
 ```bash
-# Run all tests
+# 运行所有测试
 pytest
 
-# With coverage
+# 带覆盖率
 pytest --cov=app --cov-report=html
 
-# Integration tests only
+# 仅集成测试
 pytest tests/integration/
 
-# Frontend tests
+# 前端测试
 cd frontend && npm test
 ```
 
-### Code Quality
+### 代码质量
 
 ```bash
-# Lint
+# 代码检查
 ruff check app/
 ruff format --check app/
 
-# Type check
+# 类型检查
 mypy app/
 
-# Pre-commit (runs all checks)
+# 预提交钩子（运行所有检查）
 pre-commit run --all-files
 ```
 
 ---
 
-## API Overview
+## API 概览
 
-All endpoints under `/api/v1`, responses use `{data, meta}` envelope.
+所有端点位于 `/api/v1` 下，响应使用 `{data, meta}` 包装格式。
 
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | `/webhook` | GitHub webhook receiver | HMAC |
-| GET | `/health` | Liveness probe | None |
-| GET | `/reviews` | List reviews (paginated) | JWT |
-| GET | `/reviews/{id}` | Review detail with comments | JWT |
-| POST | `/reviews/{id}/stream` | SSE real-time status | JWT |
-| POST | `/reviews` | Manually trigger review | JWT |
-| GET | `/repositories` | List active repos | JWT |
-| PUT | `/repositories/{id}/settings` | Update repo config | JWT |
-| GET | `/rules` | List all rules | JWT |
-| POST | `/rules` | Create custom rule | JWT |
-| GET | `/stats/overview` | Dashboard overview stats | JWT |
-| GET | `/stats/trends` | Review trend data | JWT |
-| POST | `/auth/github` | GitHub OAuth login | None |
-| GET | `/auth/me` | Current user info | JWT |
+| 方法 | 端点 | 描述 | 认证 |
+|------|------|------|------|
+| POST | `/webhook` | GitHub webhook 接收器 | HMAC |
+| GET | `/health` | 存活探针 | 无 |
+| GET | `/reviews` | 审查列表（分页） | JWT |
+| GET | `/reviews/{id}` | 审查详情及评论 | JWT |
+| POST | `/reviews/{id}/stream` | SSE 实时状态 | JWT |
+| POST | `/reviews` | 手动触发审查 | JWT |
+| GET | `/repositories` | 活跃仓库列表 | JWT |
+| PUT | `/repositories/{id}/settings` | 更新仓库配置 | JWT |
+| GET | `/rules` | 所有规则列表 | JWT |
+| POST | `/rules` | 创建自定义规则 | JWT |
+| GET | `/stats/overview` | 仪表盘概览统计 | JWT |
+| GET | `/stats/trends` | 审查趋势数据 | JWT |
+| POST | `/auth/github` | GitHub OAuth 登录 | 无 |
+| GET | `/auth/me` | 当前用户信息 | JWT |
 
-Full interactive docs at `/docs` (when `DEBUG=True`).
-
----
-
-## Scoring Algorithm
-
-```
-Overall Score = 0.4 × Security + 0.3 × Performance + 0.3 × Maintainability
-```
-
-**Source confidence weights**: Rule=1.0, AST=0.95, LLM=0.75
-
-**Severity penalties**: Critical=10pts, Warning=5pts, Info=1pt (per issue, weighted by confidence)
-
-**LOC tolerance**: Base score reduced by penalty ratio after per-100-LOC tolerance thresholds.
-
-Score is clamped to [0, 100].
+完整交互式文档位于 `/docs`（当 `DEBUG=True` 时可用）。
 
 ---
 
-## Project Structure
+## 评分算法
+
+```
+总体评分 = 0.4 × 安全 + 0.3 × 性能 + 0.3 × 可维护性
+```
+
+**来源置信度权重**：规则=1.0, AST=0.95, LLM=0.75
+
+**严重程度扣分**：严重=10分, 警告=5分, 信息=1分（每条问题，按置信度加权）
+
+**LOC 容忍度**：基础评分在每 100 行代码容忍阈值后按扣分比例降低。
+
+评分范围限制在 [0, 100]。
+
+---
+
+## 项目结构
 
 ```
 ai-code-review-bot/
 ├── app/
-│   ├── api/v1/           # REST endpoints (webhook, reviews, repos, rules, stats, auth, sse)
-│   ├── core/             # Config, logging, security, DB, Redis, review engine, metrics
-│   ├── analyzers/        # AST, rule engine, LLM, result aggregator
-│   ├── models/           # SQLAlchemy models (7 tables)
+│   ├── api/v1/           # REST 端点 (webhook, reviews, repos, rules, stats, auth, sse)
+│   ├── core/             # 配置、日志、安全、数据库、Redis、审查引擎、指标
+│   ├── analyzers/        # AST、规则引擎、LLM、结果聚合器
+│   ├── models/           # SQLAlchemy 模型（7 张表）
 │   ├── schemas/          # Pydantic v2 API schemas
-│   ├── services/         # Business logic (GitHub, reviews, repos, rules, stats, auth, budget, embedding)
-│   ├── tasks/            # Celery tasks
+│   ├── services/         # 业务逻辑 (GitHub, reviews, repos, rules, stats, auth, budget, embedding)
+│   ├── tasks/            # Celery 任务
 │   └── utils/
-├── frontend/             # React app (Vite + TypeScript + Tailwind + shadcn/ui)
+├── frontend/             # React 应用 (Vite + TypeScript + Tailwind + shadcn/ui)
 │   └── src/
-│       ├── components/   # UI components + Layout
-│       ├── pages/        # Dashboard, Reviews, Settings, Rules, Login
-│       ├── store/        # Zustand stores (auth, theme)
-│       └── lib/          # API client, utilities
-├── alembic/              # Database migrations
-├── docker/               # Nginx, Prometheus, Grafana configs
-├── tests/                # Unit + integration tests
-├── .github/workflows/    # CI/CD (test, build, security, deploy)
-├── docker-compose.yml    # 10-service stack
-├── requirements.txt      # Python dependencies (pinned)
-└── DESIGN.md             # Full technical specification
+│       ├── components/   # UI 组件 + 布局
+│       ├── pages/        # 仪表盘、审查、设置、规则、登录
+│       ├── store/        # Zustand 状态管理 (auth, theme)
+│       └── lib/          # API 客户端、工具函数
+├── alembic/              # 数据库迁移
+├── docker/               # Nginx、Prometheus、Grafana 配置
+├── tests/                # 单元 + 集成测试
+├── .github/workflows/    # CI/CD（测试、构建、安全、部署）
+├── docker-compose.yml    # 10 服务堆栈
+├── requirements.txt      # Python 依赖（固定版本）
+└── DESIGN.md             # 完整技术规格
 ```
 
 ---
 
-## Monitoring
+## 监控
 
-- **Prometheus**: Metrics at `/metrics` (webhook latency, review duration, LLM tokens/cost, queue depth)
-- **Grafana**: Pre-configured dashboards at `http://localhost:3001`
-- **Sentry**: Error tracking + performance monitoring (configured via `SENTRY_DSN`)
-- **Flower**: Celery worker monitoring at `http://localhost:5555`
-- **Structlog**: JSON structured logging for all services
-
----
-
-## Security
-
-- HMAC-SHA256 webhook signature verification (constant-time)
-- Redis SETNX idempotency for duplicate webhook prevention
-- JWT HttpOnly + Secure + SameSite=Strict cookies (15min access / 7d refresh)
-- Fernet encryption for stored webhook secrets (BYTEA)
-- CORS allowlist, GitHub IP whitelist ready
-- HSTS, security headers via Nginx
-- Parameterized SQL (SQLAlchemy ORM, no raw queries)
-- PII/secret redaction in Sentry events
-- Pydantic v2 `extra=forbid` on all input schemas
-- Dependabot automated dependency updates + Trivy container scanning
+- **Prometheus**：`/metrics` 端点的指标（webhook 延迟、审查耗时、LLM token/成本、队列深度）
+- **Grafana**：预配置仪表盘，地址 `http://localhost:3001`
+- **Sentry**：错误追踪 + 性能监控（通过 `SENTRY_DSN` 配置）
+- **Flower**：Celery worker 监控，地址 `http://localhost:5555`
+- **Structlog**：所有服务的 JSON 结构化日志
 
 ---
 
-## License
+## 安全措施
 
-MIT — See [LICENSE](LICENSE) for details.
+- HMAC-SHA256 webhook 签名验证（恒定时间比较）
+- Redis SETNX 幂等性防止重复 webhook
+- JWT HttpOnly + Secure + SameSite=Strict cookies（15分钟访问 / 7天刷新）
+- Fernet 加密存储 webhook 密钥（BYTEA）
+- CORS 白名单，GitHub IP 白名单就绪
+- HSTS，通过 Nginx 设置安全头
+- 参数化 SQL（SQLAlchemy ORM，无原生查询）
+- Sentry 事件中的 PII/密钥脱敏
+- Pydantic v2 所有输入 schema 使用 `extra=forbid`
+- Dependabot 自动依赖更新 + Trivy 容器扫描
+
+---
+
+## 许可证
+
+MIT — 详情见 [LICENSE](LICENSE)。

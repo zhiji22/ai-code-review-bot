@@ -60,7 +60,7 @@ export default function RulesPage() {
 
   const filtered = (data?.items ?? []).filter((r) => {
     if (!search) return true;
-    const s = search.toLowerCase();
+    const s = (search ?? "").toLowerCase();
     const ruleId = r.rule_id?.toLowerCase() ?? "";
     const name = r.name?.toLowerCase() ?? "";
     const description = r.description?.toLowerCase() ?? "";
