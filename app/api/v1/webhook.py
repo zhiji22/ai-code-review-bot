@@ -65,6 +65,26 @@ async def receive_webhook(
     # Parse payload
     try:
         payload = json.loads(body)
+    except json.JSONDecodeError as e:
+        logger.error("webhook_payload_invalid", error=str(e))
+        return {"status": "error", "detail": "Invalid payload"}
+
+    # 在 schema 校验之前先跳过非 actionable 的 PR action(closed/edited/labeled/...):
+    # 它们是正常预期事件,不是错误。若走 WebhookPREvent 校验会抛错,导致 GitHub
+    # 显示红色 delivery 并刷错误日志。
+    from app.schemas.webhook import ACTIONABLE_PR_ACTIONS
+
+    action = payload.get("action")
+    if action not in ACTIONABLE_PR_ACTIONS:
+        logger.info(
+            "webhook_pr_action_skipped",
+            action=action,
+            delivery_id=x_github_delivery,
+        )
+        return {"status": "ignored", "action": action}
+
+    # Full payload validation (action is guaranteed actionable now)
+    try:
         from app.schemas.webhook import WebhookPREvent
 
         event = WebhookPREvent.model_validate(payload)

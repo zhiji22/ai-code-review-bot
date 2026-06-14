@@ -93,6 +93,39 @@ class TestWebhookEndpoint:
         data = resp.json()
         assert data["status"] == "pong"
 
+    @pytest.mark.asyncio
+    async def test_webhook_closed_action_ignored(
+        self, client: AsyncClient, webhook_payload: dict, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """非 actionable 的 PR action(closed/edited/...)应被忽略,而非报错。
+
+        回归:此前这些 action 走完整 payload 校验并返回 ``{"status": "error"}``,
+        在 GitHub 显示红色 delivery 并刷错误日志。现在应在校验/入队之前
+        短路返回 ignored。
+        """
+        secret = "test_webhook_secret"
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        monkeypatch.setattr(settings, "github_webhook_secret", secret)
+
+        closed_payload = {**webhook_payload, "action": "closed"}
+        payload_bytes = json.dumps(closed_payload).encode()
+        signature = _sign_payload(payload_bytes, secret)
+
+        resp = await client.post(
+            "/api/v1/webhook",
+            content=payload_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Hub-Signature-256": signature,
+                "X-GitHub-Event": "pull_request",
+                "X-GitHub-Delivery": "delivery-closed",
+            },
+        )
+        assert resp.status_code == 202
+        assert resp.json()["status"] == "ignored"
+
 
 class TestReviewEndpoints:
     """Tests for review listing endpoints."""

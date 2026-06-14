@@ -8,6 +8,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
+# 会触发审查的 PR webhook action。其余 action(closed/edited/labeled/...)
+# 不报错、直接忽略。
+ACTIONABLE_PR_ACTIONS: frozenset[str] = frozenset({"opened", "synchronize", "reopened"})
+
 
 class WebhookRepository(BaseModel):
     """Repository info in webhook payload."""
@@ -69,8 +73,7 @@ class WebhookPREvent(BaseModel):
     @classmethod
     def validate_action(cls, v: str) -> str:
         """Only process actionable events."""
-        allowed = {"opened", "synchronize", "reopened"}
-        if v not in allowed:
+        if v not in ACTIONABLE_PR_ACTIONS:
             raise ValueError(f"Action '{v}' is not actionable for review")
         return v
 
