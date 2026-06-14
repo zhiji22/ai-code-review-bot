@@ -8,7 +8,8 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Spinner } from "@/components/ui/spinner";
 import { rulesApi, type Rule } from "@/lib/api";
 import { severityColor } from "@/lib/utils";
-import { Plus, Trash2, Power, Search, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Power, Search } from "lucide-react";
+import { useToastStore } from "@/store/toast";
 
 export default function RulesPage() {
   const queryClient = useQueryClient();
@@ -23,12 +24,38 @@ export default function RulesPage() {
 
   const toggleMutation = useMutation({
     mutationFn: (id: number) => rulesApi.toggle(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rules"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rules"] });
+      useToastStore.getState().addToast({
+        type: "success",
+        message: "Rule status updated",
+      });
+    },
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { detail?: string } } };
+      useToastStore.getState().addToast({
+        type: "error",
+        message: axiosErr.response?.data?.detail || "Failed to toggle rule",
+      });
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => rulesApi.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rules"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rules"] });
+      useToastStore.getState().addToast({
+        type: "success",
+        message: "Rule deleted successfully",
+      });
+    },
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { detail?: string } } };
+      useToastStore.getState().addToast({
+        type: "error",
+        message: axiosErr.response?.data?.detail || "Failed to delete rule",
+      });
+    },
   });
 
   const filtered = (data?.items ?? []).filter((r) => {
@@ -116,6 +143,8 @@ export default function RulesPage() {
                   rule={rule}
                   onToggle={() => toggleMutation.mutate(rule.id)}
                   onDelete={() => deleteMutation.mutate(rule.id)}
+                  isToggling={toggleMutation.isPending && toggleMutation.variables === rule.id}
+                  isDeleting={deleteMutation.isPending && deleteMutation.variables === rule.id}
                 />
               ))}
             </TableBody>
@@ -130,10 +159,14 @@ function RuleRow({
   rule,
   onToggle,
   onDelete,
+  isToggling,
+  isDeleting,
 }: {
   rule: Rule;
   onToggle: () => void;
   onDelete: () => void;
+  isToggling: boolean;
+  isDeleting: boolean;
 }) {
   return (
     <TableRow>
@@ -163,12 +196,22 @@ function RuleRow({
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-1">
-          <Button onClick={onToggle} variant="ghost" size="icon">
-            <Power className="h-4 w-4" />
+          <Button
+            onClick={onToggle}
+            variant="ghost"
+            size="icon"
+            loading={isToggling}
+          >
+            {isToggling ? null : <Power className="h-4 w-4" />}
           </Button>
           {!rule.is_builtin && (
-            <Button onClick={onDelete} variant="ghost" size="icon">
-              <Trash2 className="h-4 w-4 text-destructive" />
+            <Button
+              onClick={onDelete}
+              variant="ghost"
+              size="icon"
+              loading={isDeleting}
+            >
+              {isDeleting ? null : <Trash2 className="h-4 w-4 text-destructive" />}
             </Button>
           )}
         </div>
@@ -179,8 +222,6 @@ function RuleRow({
 
 function CreateRuleForm({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [form, setForm] = useState({
     rule_id: "",
     name: "",
@@ -197,17 +238,20 @@ function CreateRuleForm({ onClose }: { onClose: () => void }) {
     mutationFn: () => rulesApi.create(form),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rules"] });
-      setSuccess(true);
-      setTimeout(() => {
-        onClose();
-      }, 500);
+      useToastStore.getState().addToast({
+        type: "success",
+        message: "Rule created successfully",
+      });
+      onClose();
     },
     onError: (err: unknown) => {
-      // Extract error detail from axios response if available
       const axiosErr = err as { response?: { data?: { detail?: string } } };
       const message = axiosErr.response?.data?.detail
         || (err instanceof Error ? err.message : "Failed to create rule");
-      setError(message);
+      useToastStore.getState().addToast({
+        type: "error",
+        message,
+      });
     },
   });
 
@@ -308,26 +352,12 @@ function CreateRuleForm({ onClose }: { onClose: () => void }) {
             }
           />
         </div>
-        {error && (
-          <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md">
-            <AlertCircle className="h-4 w-4" />
-            <span className="text-sm">{error}</span>
-          </div>
-        )}
-        {success && (
-          <div className="flex items-center gap-2 p-3 bg-green-500/10 text-green-600 rounded-md">
-            <span className="text-sm">✓ Rule created successfully!</span>
-          </div>
-        )}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button
-            onClick={() => {
-              setError(null);
-              createMutation.mutate();
-            }}
+            onClick={() => createMutation.mutate()}
             disabled={!form.rule_id || !form.pattern || createMutation.isPending}
           >
             {createMutation.isPending ? <Spinner /> : "Create Rule"}

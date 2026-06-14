@@ -4,6 +4,7 @@ import { LayoutDashboard, GitPullRequest, Settings, Shield, LogOut, Moon, Sun, B
 import { useAuthStore } from "@/store/auth";
 import { useThemeStore } from "@/store/theme";
 import { cn } from "@/lib/utils";
+import { ToastContainer } from "@/components/ui/toast-container";
 
 interface NavItem {
   to: string;
@@ -117,6 +118,9 @@ export default function Layout({ children }: { children: ReactNode }) {
       <main className="flex-1 overflow-auto pt-14 md:pt-0">
         <div className="container mx-auto max-w-7xl p-4 md:p-8">{children}</div>
       </main>
+
+      {/* Toast Container - 固定在右下角 */}
+      <ToastContainer />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
 type Variant = "default" | "secondary" | "destructive" | "outline" | "ghost" | "link";
 type Size = "default" | "sm" | "lg" | "icon";
@@ -23,10 +24,11 @@ const sizeClasses: Record<Size, string> = {
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
+  loading?: boolean;
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "default", size = "default", ...props }, ref) => (
+  ({ className, variant = "default", size = "default", loading, disabled, children, ...props }, ref) => (
     <button
       ref={ref}
       className={cn(
@@ -37,8 +39,13 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         sizeClasses[size],
         className,
       )}
+      disabled={disabled || loading}
+      aria-busy={loading}
       {...props}
-    />
+    >
+      {loading && <Spinner className="h-4 w-4" aria-hidden="true" />}
+      {children}
+    </button>
   ),
 );
 Button.displayName = "Button";
