@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -92,7 +93,18 @@ async def create_rule(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ApiResponse[RuleSchema]:
     service = RuleService(db)
-    rule = await service.create(payload)
+    try:
+        rule = await service.create(payload)
+    except IntegrityError as e:
+        if "rule_id" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Rule ID '{payload.rule_id}' already exists. Please use a different ID.",
+            ) from e
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to create rule due to data conflict.",
+        ) from e
     return ApiResponse(data=RuleSchema.model_validate(rule, from_attributes=True))
 
 

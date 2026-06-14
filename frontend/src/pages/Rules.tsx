@@ -8,7 +8,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Spinner } from "@/components/ui/spinner";
 import { rulesApi, type Rule } from "@/lib/api";
 import { severityColor } from "@/lib/utils";
-import { Plus, Trash2, Power, Search } from "lucide-react";
+import { Plus, Trash2, Power, Search, AlertCircle } from "lucide-react";
 
 export default function RulesPage() {
   const queryClient = useQueryClient();
@@ -179,6 +179,8 @@ function RuleRow({
 
 function CreateRuleForm({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const [form, setForm] = useState({
     rule_id: "",
     name: "",
@@ -195,7 +197,17 @@ function CreateRuleForm({ onClose }: { onClose: () => void }) {
     mutationFn: () => rulesApi.create(form),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rules"] });
-      onClose();
+      setSuccess(true);
+      setTimeout(() => {
+        onClose();
+      }, 500);
+    },
+    onError: (err: unknown) => {
+      // Extract error detail from axios response if available
+      const axiosErr = err as { response?: { data?: { detail?: string } } };
+      const message = axiosErr.response?.data?.detail
+        || (err instanceof Error ? err.message : "Failed to create rule");
+      setError(message);
     },
   });
 
@@ -296,12 +308,26 @@ function CreateRuleForm({ onClose }: { onClose: () => void }) {
             }
           />
         </div>
+        {error && (
+          <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md">
+            <AlertCircle className="h-4 w-4" />
+            <span className="text-sm">{error}</span>
+          </div>
+        )}
+        {success && (
+          <div className="flex items-center gap-2 p-3 bg-green-500/10 text-green-600 rounded-md">
+            <span className="text-sm">✓ Rule created successfully!</span>
+          </div>
+        )}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button
-            onClick={() => createMutation.mutate()}
+            onClick={() => {
+              setError(null);
+              createMutation.mutate();
+            }}
             disabled={!form.rule_id || !form.pattern || createMutation.isPending}
           >
             {createMutation.isPending ? <Spinner /> : "Create Rule"}
