@@ -216,6 +216,12 @@ class LLMAnalyzer:
             result = _parse_response(cached)
             result.cached = True
             result.model = cached.get("model", "")
+            # Restore token usage so cached files still contribute to cost tracking.
+            # _parse_response only reads issues/summary/score, so tokens must be
+            # restored here — otherwise `total_tokens == 0` skips the llm_usage record.
+            result.prompt_tokens = int(cached.get("prompt_tokens", 0) or 0)
+            result.completion_tokens = int(cached.get("completion_tokens", 0) or 0)
+            result.total_tokens = int(cached.get("total_tokens", 0) or 0)
             logger.info("llm_cache_hit", file=file_path, key=cache_key[:16])
             return result
 

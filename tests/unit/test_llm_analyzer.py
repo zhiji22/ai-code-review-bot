@@ -683,6 +683,45 @@ class TestAnalyzeCacheHit:
         # Should NOT write to cache on a hit
         mock_set.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_analyze_cache_hit_restores_tokens(self) -> None:
+        """Cached result must restore token usage so cost tracking is not lost.
+
+        Regression: previously the cache-hit path only restored `model`, leaving
+        `total_tokens == 0`, which caused the llm_usage record (and thus the LLM
+        cost on the dashboard) to be skipped for cached files.
+        """
+        cached_data = {
+            "issues": [],
+            "summary": "Cached result",
+            "score": 90,
+            "model": "qwen-turbo",
+            "prompt_tokens": 123,
+            "completion_tokens": 45,
+            "total_tokens": 168,
+        }
+
+        analyzer = LLMAnalyzer(api_key="sk-test")
+
+        with (
+            patch("app.analyzers.llm_analyzer._get_cached", return_value=cached_data),
+            patch("app.analyzers.llm_analyzer._set_cached") as mock_set,
+            patch(_LOGGER),
+        ):
+            result = await analyzer.analyze(
+                code_diff="some diff",
+                file_context="",
+                language="python",
+                file_path="test.py",
+            )
+
+        assert result.cached is True
+        assert result.model == "qwen-turbo"
+        assert result.prompt_tokens == 123
+        assert result.completion_tokens == 45
+        assert result.total_tokens == 168
+        mock_set.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # 12. LLMAnalyzer.analyze - success (happy path)

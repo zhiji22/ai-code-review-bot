@@ -84,8 +84,16 @@ jobs:
             # Extract new code
             tar xzf /tmp/deploy.tar.gz -C . --overwrite
 
-            # Pull latest images and restart services
-            docker compose pull
+            # Rebuild images from the newly extracted source.
+            # NOTE: backend/worker/beat/frontend use `build:` (no `image:` tag),
+            # so `docker compose pull` is a no-op for them and `up -d` without
+            # `--build` silently reuses stale images. We must build explicitly.
+            docker compose build
+
+            # Pull updated images for services that use `image:` (postgres/redis).
+            # `up -d` only pulls when the image is absent, so explicit pull is
+            # required to pick up floating-tag updates (e.g. security patches).
+            docker compose pull postgres redis
 
             # Run database migrations
             docker compose run --rm backend alembic upgrade head
