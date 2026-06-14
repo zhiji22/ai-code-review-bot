@@ -1,4 +1,4 @@
-FROM ccr.ccs.tencentyun.com/library/node:20-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -6,13 +6,17 @@ ARG VITE_GITHUB_CLIENT_ID
 ENV VITE_GITHUB_CLIENT_ID=$VITE_GITHUB_CLIENT_ID
 
 COPY frontend/package*.json ./
-RUN npm ci --registry=https://registry.npmmirror.com
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm ci
+
+# 本地跑
+# RUN npm ci --registry=https://registry.npmmirror.com
 
 
 COPY frontend/ .
 RUN npm run build
 
-FROM ccr.ccs.tencentyun.com/library/nginx:1.27-alpine
+FROM nginx:1.27-alpine
 
 COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
