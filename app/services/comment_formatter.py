@@ -17,6 +17,79 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def parse_valid_diff_lines(patch: str) -> list[int]:
+    """Extract new-file line numbers a GitHub inline comment may anchor on.
+
+    GitHub's review API rejects (HTTP 422) any inline comment whose ``line`` does
+    not fall inside a diff hunk on the requested ``side``. For ``side=RIGHT`` the
+    legal targets are the new-file line numbers of added (``+``) and unchanged
+    context (`` ``) lines within a hunk. Deleted (``-``) lines have no RIGHT-side
+    line number and are therefore excluded.
+
+    Args:
+        patch: The unified-diff ``patch`` text for a single file (may be empty
+            for binary/renamed-without-change files).
+
+    Returns:
+        Sorted list of valid RIGHT-side line numbers. Empty if there is no patch.
+    """
+    if not patch:
+        return []
+
+    valid: list[int] = []
+    new_line = 0
+    in_hunk = False
+
+    for raw in patch.splitlines():
+        if raw.startswith("@@"):
+            # @@ -a,b +c,d @@  -> c is the new-file start line
+            plus_idx = raw.find("+", 1)  # skip the leading "@@"
+            if plus_idx == -1:
+                in_hunk = False
+                continue
+            rest = raw[plus_idx + 1 :]
+            head = rest.split(",", 1)[0]
+            try:
+                new_line = int(head) - 1  # first diff body line increments to `c`
+                in_hunk = True
+            except ValueError:
+                in_hunk = False
+            continue
+
+        if not in_hunk:
+            continue
+
+        # Skip the file header lines that also start with +++/--- inside a patch.
+        if raw.startswith("+++") or raw.startswith("---"):
+            continue
+
+        prefix = raw[:1]
+        if prefix == "+" or prefix == " ":
+            new_line += 1
+            valid.append(new_line)
+        elif prefix == "-":
+            # Deleted line: advances only the old-file counter, not the new one.
+            continue
+        # "\" (no newline) and anything else: ignore.
+
+    return valid
+
+
+def snap_to_valid_line(line: int, valid_lines: list[int]) -> int | None:
+    """Snap a reported line to the nearest valid diff line.
+
+    Prefers an exact match, otherwise returns the valid line with the smallest
+    absolute distance (ties broken toward the lower line number). Returns
+    ``None`` when ``valid_lines`` is empty, signalling the caller to drop the
+    comment rather than risk a 422.
+    """
+    if not valid_lines:
+        return None
+    if line in valid_lines:
+        return line
+    return min(valid_lines, key=lambda v: (abs(v - line), v))
+
+
 class CommentFormatter:
     """Formats review results into GitHub PR comments."""
 
@@ -98,12 +171,20 @@ class CommentFormatter:
         self,
         result: AggregatedResult,
         max_comments: int = 50,
+        valid_lines_by_file: dict[str, list[int]] | None = None,
     ) -> list[dict[str, object]]:
         """Build the payload for GitHub's review API with inline comments.
 
         Args:
             result: Aggregated review result
             max_comments: Max number of inline comments (GitHub limits)
+            valid_lines_by_file: Optional mapping of file path -> diff-valid
+                RIGHT-side line numbers (from :func:`parse_valid_diff_lines`).
+                When provided, each comment's line is snapped to the nearest
+                valid line and comments with no valid anchor are dropped. This
+                prevents GitHub from rejecting the whole batch with HTTP 422
+                (the reviews API is all-or-nothing). When ``None``, the reported
+                line is used as-is (legacy behavior).
 
         Returns:
             List of comment dicts for the API payload
@@ -121,7 +202,16 @@ class CommentFormatter:
 
         comments: list[dict[str, object]] = []
         for issue in sorted_issues[:max_comments]:
-            line = issue.line_end if issue.line_end else issue.line_number
+            reported = issue.line_end if issue.line_end else issue.line_number
+            if valid_lines_by_file is not None:
+                valid = valid_lines_by_file.get(issue.file_path, [])
+                line = snap_to_valid_line(reported, valid)
+                if line is None:
+                    # No diff line to anchor on in this file -> skip rather than
+                    # let one bad line fail the entire review submission (422).
+                    continue
+            else:
+                line = reported
             comments.append(
                 {
                     "path": issue.file_path,

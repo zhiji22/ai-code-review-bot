@@ -26,7 +26,7 @@ from app.analyzers.result_aggregator import (
     ResultAggregator,
 )
 from app.analyzers.rule_engine import RuleEngine, RuleViolation
-from app.services.comment_formatter import CommentFormatter
+from app.services.comment_formatter import CommentFormatter, parse_valid_diff_lines
 
 if TYPE_CHECKING:
     from app.services.github_client import FileDiff, GitHubClient
@@ -169,7 +169,20 @@ class ReviewEngine:
             )
 
             # 8. Post to GitHub
-            await self._post_to_github(github_client, repo_full_name, pr_number, commit_sha, result)
+            # Build a per-file map of diff-valid RIGHT-side line numbers so inline
+            # comments snap to anchorable lines instead of failing the whole review
+            # with HTTP 422 (line outside diff hunk).
+            valid_lines_by_file = {
+                f.file_path: parse_valid_diff_lines(f.raw_patch) for f in files
+            }
+            await self._post_to_github(
+                github_client,
+                repo_full_name,
+                pr_number,
+                commit_sha,
+                result,
+                valid_lines_by_file=valid_lines_by_file,
+            )
 
             result.success = True
             logger.info(
@@ -340,6 +353,7 @@ class ReviewEngine:
         pr_number: int,
         commit_sha: str,
         result: ReviewResult,
+        valid_lines_by_file: dict[str, list[int]] | None = None,
     ) -> None:
         """Post review comments to GitHub PR."""
         try:
@@ -349,7 +363,9 @@ class ReviewEngine:
 
             # Post inline comments via review API
             inline_payload = self.formatter.format_inline_comments_payload(
-                result.aggregated, max_comments=self.max_inline_comments
+                result.aggregated,
+                max_comments=self.max_inline_comments,
+                valid_lines_by_file=valid_lines_by_file,
             )
             if inline_payload:
                 try:
