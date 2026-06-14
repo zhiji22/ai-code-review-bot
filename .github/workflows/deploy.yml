@@ -53,7 +53,6 @@ jobs:
             frontend/tailwind.config.ts \
             frontend/postcss.config.js \
             frontend/index.html \
-            docker-compose.yml \
             docker/ \
             Dockerfile.backend \
             Dockerfile.frontend \
@@ -63,7 +62,8 @@ jobs:
             pyproject.toml \
             scripts/ \
             .env.example \
-            .dockerignore
+            .dockerignore.backend \
+            .dockerignore.frontend
 
       - name: Upload to server
         run: |
@@ -90,11 +90,13 @@ jobs:
             # Extract new code (now guaranteed clean state)
             tar xzf /tmp/deploy.tar.gz -C .
 
-            # Rebuild images from the newly extracted source.
-            # NOTE: backend/worker/beat/frontend use `build:` (no `image:` tag),
-            # so `docker compose pull` is a no-op for them and `up -d` without
-            # `--build` silently reuses stale images. We must build explicitly.
-            docker compose build
+            # Build backend services (backend, worker, beat)
+            cp .dockerignore.backend .dockerignore
+            docker compose build backend worker beat
+
+            # Build frontend service (nginx)
+            cp .dockerignore.frontend .dockerignore
+            docker compose build nginx
 
             # Pull updated images for services that use `image:` (postgres/redis).
             # `up -d` only pulls when the image is absent, so explicit pull is
