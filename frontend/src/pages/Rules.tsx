@@ -61,10 +61,13 @@ export default function RulesPage() {
   const filtered = (data?.items ?? []).filter((r) => {
     if (!search) return true;
     const s = search.toLowerCase();
+    const ruleId = r.rule_id?.toLowerCase() ?? "";
+    const name = r.name?.toLowerCase() ?? "";
+    const description = r.description?.toLowerCase() ?? "";
     return (
-      r.rule_id.toLowerCase().includes(s) ||
-      r.name.toLowerCase().includes(s) ||
-      r.description.toLowerCase().includes(s)
+      ruleId.includes(s) ||
+      name.includes(s) ||
+      description.includes(s)
     );
   });
 
