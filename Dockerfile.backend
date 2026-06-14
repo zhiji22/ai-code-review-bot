@@ -1,7 +1,4 @@
-# ─────────────────────────────────────────────
-# Backend: Python 3.12-slim + uvicorn
-# ─────────────────────────────────────────────
-FROM python:3.12-slim AS base
+FROM ccr.ccs.tencentyun.com/library/python:3.12-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -10,9 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# System deps for tree-sitter compilation
-RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources && \
-    sed -i 's|http://security.debian.org|https://security.debian.org|g' /etc/apt/sources.list.d/debian.sources && \
+RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's/security.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources && \
     apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
@@ -31,7 +27,7 @@ COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini .
 
-# Create non-root user for security (avoids Celery root warning + limits RCE impact)
+
 RUN addgroup --system app && adduser --system --ingroup app app && \
     chown -R app:app /app
 USER app
