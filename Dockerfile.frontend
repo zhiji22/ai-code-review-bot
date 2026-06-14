@@ -6,11 +6,7 @@ ARG VITE_GITHUB_CLIENT_ID
 ENV VITE_GITHUB_CLIENT_ID=$VITE_GITHUB_CLIENT_ID
 
 COPY frontend/package*.json ./
-RUN npm config set registry https://registry.npmmirror.com && \
-    npm ci
-
-# 本地跑
-# RUN npm ci --registry=https://registry.npmmirror.com
+RUN npm ci --registry=https://registry.npmmirror.com
 
 
 COPY frontend/ .
