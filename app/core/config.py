@@ -103,6 +103,9 @@ class Settings(BaseSettings):
     github_oauth_redirect_uri: str | None = None  # deprecated, not used
     github_token: str | None = None  # dev fallback when not using GitHub App auth
 
+    # ── Guest Login (demo account) ────────────────────────
+    guest_github_token: str | None = None  # GitHub PAT for guest login
+
     # ── OpenAI / LLM ─────────────────────────────────────
     openai_api_key: str = Field(..., min_length=1)
     openai_api_base: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"

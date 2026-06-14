@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { authApi } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
-import { Bot, Github } from "lucide-react";
+import { Bot, Github, User } from "lucide-react";
 
 /** Consistent redirect URI for GitHub OAuth — must match in authorize + exchange steps. */
 const OAUTH_REDIRECT_URI = window.location.origin + "/login";
@@ -40,38 +40,21 @@ export default function LoginPage() {
     setError(null);
 
     authApi
-    .github(oauthCode, OAUTH_REDIRECT_URI)
-    .then((result) => {
-      console.log("=== 1 github success ===");
-      console.log(result);
-
-      setAuth(
-        {
-          access_token: result.access_token,
-          refresh_token: result.refresh_token,
-        },
-        result.user,
-      );
-
-      console.log("=== 2 setAuth success ===");
-
-      console.log(
-        "access_token exists:",
-        !!localStorage.getItem("access_token")
-      );
-
-      navigate("/", { replace: true });
-
-      console.log("=== 3 navigate success ===");
+      .github(oauthCode, OAUTH_REDIRECT_URI)
+      .then((result) => {
+        setAuth(
+          {
+            access_token: result.access_token,
+            refresh_token: result.refresh_token,
+          },
+          result.user,
+        );
+        navigate("/", { replace: true });
       })
-      .catch((err) => {
-        console.error("=== 4 github error ===");
-        console.error(err);
-
+      .catch(() => {
         setError("GitHub authentication failed. Please try again.");
       })
       .finally(() => {
-        console.log("=== 5 finally ===");
         setLoading(false);
       });
 
@@ -100,6 +83,24 @@ export default function LoginPage() {
       navigate("/");
     } catch {
       setError("Dev login failed. Is the backend running?");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await authApi.guestLogin();
+      setAuth(
+        { access_token: result.access_token, refresh_token: result.refresh_token },
+        result.user,
+      );
+      navigate("/");
+    } catch (err) {
+      console.error("Guest login error:", err);
+      setError("Guest login failed. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -149,6 +150,15 @@ export default function LoginPage() {
           <CardDescription>Sign in to get started</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <Button onClick={handleGuestLogin} className="w-full" size="lg" disabled={loading}>
+            {loading ? <Spinner /> : (
+              <>
+                <User className="h-5 w-5 mr-2" />
+                游客登录
+              </>
+            )}
+          </Button>
+
           {showDevLogin && (
             <Button onClick={handleDevLogin} className="w-full" size="lg" disabled={loading}>
               {loading ? <Spinner /> : "Dev Login (no GitHub required)"}

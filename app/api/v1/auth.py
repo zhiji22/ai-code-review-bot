@@ -12,7 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.rate_limit import check_rate_limit
 from app.models.user import User
+
+from fastapi import Request
 from app.schemas.common import ApiResponse
 from app.schemas.users import (
     GitHubLoginResponseSchema,
@@ -61,6 +64,62 @@ async def dev_login() -> ApiResponse[TokenSchema]:
             refresh_token=refresh,
             token_type="bearer",
             expires_in=settings.jwt_access_expire_minutes * 60,
+        )
+    )
+
+
+@router.post(
+    "/guest-login",
+    response_model=ApiResponse[GitHubLoginResponseSchema],
+    summary="Login as guest (demo account)",
+)
+async def guest_login(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ApiResponse[GitHubLoginResponseSchema]:
+    """Login as a guest user using a predefined GitHub account.
+
+    This allows visitors to explore the app without GitHub OAuth.
+    The guest account credentials are configured via GUEST_GITHUB_TOKEN env var.
+    """
+    # Rate limit: 10 requests per minute per IP to prevent abuse
+    client_ip = request.client.host if request.client else "unknown"
+    await check_rate_limit(f"guest_login:{client_ip}", limit=10, window_seconds=60)
+
+    service = AuthService(db)
+    try:
+        result = await service.guest_login()
+    except ValueError as exc:
+        logger.warning("Guest login rejected: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Guest login failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Guest login failed. Please try again later.",
+        ) from exc
+
+    user: User = result["user"]
+    access = AuthService.create_access_token(
+        user.id,
+        extra={
+            "username": user.username,
+            "email": user.email or "",
+            "is_admin": user.is_admin,
+        },
+    )
+    refresh = AuthService.create_refresh_token(user.id)
+
+    return ApiResponse(
+        data=GitHubLoginResponseSchema(
+            access_token=access,
+            refresh_token=refresh,
+            token_type="bearer",
+            expires_in=settings.jwt_access_expire_minutes * 60,
+            user=UserSchema.model_validate(user, from_attributes=True),
         )
     )
 

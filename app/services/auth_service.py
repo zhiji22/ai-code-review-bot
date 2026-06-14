@@ -214,6 +214,51 @@ class AuthService:
         await self.session.refresh(user)
         return user
 
+    # ------------------------------------------------------------------ Guest Login
+    async def guest_login(self) -> GitHubOAuthResult:
+        """Login as guest using a predefined GitHub Personal Access Token.
+
+        Uses a PAT to obtain user info and create/update the user account.
+        This is the recommended approach since GitHub deprecated password-based auth.
+
+        WARNING: Store the PAT securely in environment variables. Only use for
+        demo purposes with a dedicated demo account.
+        """
+        if not settings.guest_github_token:
+            raise ValueError("Guest login not configured. Set GUEST_GITHUB_TOKEN.")
+
+        proxy_url = (
+            os.environ.get("HTTPS_PROXY")
+            or os.environ.get("HTTP_PROXY")
+            or os.environ.get("https_proxy")
+            or os.environ.get("http_proxy")
+        )
+        client_kwargs: dict[str, Any] = {"timeout": httpx.Timeout(30.0, connect=5.0)}
+        if proxy_url:
+            client_kwargs["proxy"] = proxy_url
+            logger.debug("Guest login: using proxy %s", proxy_url)
+
+        async with httpx.AsyncClient(**client_kwargs) as client:
+            access_token = settings.guest_github_token
+
+            user_resp = await client.get(
+                "https://api.github.com/user",
+                headers={
+                    "Authorization": f"token {access_token}",
+                    "Accept": "application/vnd.github+json",
+                },
+            )
+            user_resp.raise_for_status()
+            gh_user = user_resp.json()
+
+        # Upsert user
+        user = await self._upsert_user(gh_user, access_token)
+        return {
+            "user": user,
+            "github_token": access_token,
+            "github_data": gh_user,
+        }
+
     # ------------------------------------------------------------------ user helpers
     async def get_user_by_id(self, user_id: int) -> User | None:
         result = await self.session.execute(select(User).where(User.id == user_id))
