@@ -62,7 +62,8 @@ jobs:
             alembic.ini \
             pyproject.toml \
             scripts/ \
-            .env.example
+            .env.example \
+            .dockerignore
 
       - name: Upload to server
         run: |
@@ -76,13 +77,18 @@ jobs:
             set -euo pipefail
             cd ${{ secrets.DEPLOY_PATH || '/opt/ai-code-review-bot' }}
 
-            # Backup current state
-            if [ -d ".git" ]; then
-              git stash || true
-            fi
+            # ─────────────────────────────────────────────
+            # CRITICAL: Clean old source files BEFORE extracting
+            # This ensures deleted files don't linger and cause
+            # Docker cache to incorrectly think nothing changed.
+            # ─────────────────────────────────────────────
+            rm -rf app/ alembic/ frontend/src/
 
-            # Extract new code
-            tar xzf /tmp/deploy.tar.gz -C . --overwrite
+            # Also clean Python cache that might interfere
+            find . -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+
+            # Extract new code (now guaranteed clean state)
+            tar xzf /tmp/deploy.tar.gz -C .
 
             # Rebuild images from the newly extracted source.
             # NOTE: backend/worker/beat/frontend use `build:` (no `image:` tag),
