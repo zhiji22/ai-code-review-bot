@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     db_pool_size: int = 10
     db_max_overflow: int = 20
     db_echo: bool = False
+    # 为 True 时异步引擎使用 NullPool(不缓存连接)。Celery worker/beat 必需:
+    # 它们每个任务都新建一个事件循环,而 asyncpg 连接绑定在创建它的循环上,
+    # 跨循环复用池中连接会抛 "Future attached to a different loop"。
+    # backend 跑在单一长生命周期循环上,保持 False 即可。
+    db_use_null_pool: bool = False
 
     @computed_field  # type: ignore[prop-decorator]
     @property

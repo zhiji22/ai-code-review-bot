@@ -79,6 +79,9 @@ services:
       HTTPS_PROXY: ${HTTPS_PROXY:-}
       HTTP_PROXY: ${HTTP_PROXY:-}
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,redis,nginx}
+      # worker 每个任务都新建事件循环,asyncpg 连接绑定创建它的循环,
+      # 跨循环复用会失败。NullPool 每次用完即弃连接 -> 跨任务循环安全。
+      DB_USE_NULL_POOL: "true"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file: .env
@@ -117,6 +120,8 @@ services:
       HTTPS_PROXY: ${HTTPS_PROXY:-}
       HTTP_PROXY: ${HTTP_PROXY:-}
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,redis,nginx}
+      # 与 worker 同样的每任务事件循环约束 -> NullPool。
+      DB_USE_NULL_POOL: "true"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file: .env

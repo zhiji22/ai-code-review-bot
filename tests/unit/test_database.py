@@ -38,6 +38,7 @@ class TestGetEngine:
         mock_settings.db_pool_size = 5
         mock_settings.db_max_overflow = 10
         mock_settings.db_echo = False
+        mock_settings.db_use_null_pool = False
 
         with patch("app.core.database.get_settings", return_value=mock_settings):
             with patch("app.core.database.create_async_engine") as mock_create:
@@ -65,6 +66,7 @@ class TestGetEngine:
         mock_settings.db_pool_size = 5
         mock_settings.db_max_overflow = 10
         mock_settings.db_echo = False
+        mock_settings.db_use_null_pool = False
 
         with patch("app.core.database.get_settings", return_value=mock_settings):
             with patch("app.core.database.create_async_engine") as mock_create:
@@ -87,6 +89,7 @@ class TestGetEngine:
         mock_settings.db_pool_size = 20
         mock_settings.db_max_overflow = 30
         mock_settings.db_echo = True
+        mock_settings.db_use_null_pool = False
 
         with patch("app.core.database.get_settings", return_value=mock_settings):
             with patch("app.core.database.create_async_engine") as mock_create:
@@ -100,6 +103,60 @@ class TestGetEngine:
         assert call_kwargs[1]["echo"] is True
         assert call_kwargs[1]["pool_pre_ping"] is True
         assert call_kwargs[1]["pool_recycle"] == 3600
+
+
+class TestGetEngineNullPool:
+    """开启 db_use_null_pool 时必须使用 NullPool。
+
+    回归测试:Celery 每个任务都新建一个 asyncio 事件循环,任务结束即关闭;
+    asyncpg 连接绑定在创建它的循环上,下一个任务(新循环)复用池中连接会抛
+    ``RuntimeError: ... Future ... attached to a different loop``。NullPool
+    每次用完即弃连接,所以没有任何连接能跨循环存活。
+    backend(uvicorn)跑在单一长生命周期循环上,继续使用连接池。
+    """
+
+    def test_null_pool_used_when_flag_set(self) -> None:
+        from app.core.database import get_engine
+        from sqlalchemy.pool import NullPool
+
+        mock_settings = MagicMock()
+        mock_settings.database_url = "postgresql+asyncpg://u:p@localhost:5432/db"
+        mock_settings.db_echo = False
+        mock_settings.db_use_null_pool = True
+
+        with patch("app.core.database.get_settings", return_value=mock_settings):
+            with patch("app.core.database.create_async_engine") as mock_create:
+                mock_create.return_value = MagicMock()
+                get_engine()
+
+        kwargs = mock_create.call_args[1]
+        assert kwargs.get("poolclass") is NullPool
+        # pool_size 等 pre-ping/池大小参数对 NullPool 无意义,不应传入
+        # (SQLAlchemy 会忽略,这里断言只是为了明确意图)。
+        assert "pool_size" not in kwargs
+        assert "max_overflow" not in kwargs
+        assert "pool_pre_ping" not in kwargs
+        assert "pool_recycle" not in kwargs
+
+    def test_queue_pool_used_when_flag_unset(self) -> None:
+        from app.core.database import get_engine
+
+        mock_settings = MagicMock()
+        mock_settings.database_url = "postgresql+asyncpg://u:p@localhost:5432/db"
+        mock_settings.db_pool_size = 5
+        mock_settings.db_max_overflow = 10
+        mock_settings.db_echo = False
+        mock_settings.db_use_null_pool = False
+
+        with patch("app.core.database.get_settings", return_value=mock_settings):
+            with patch("app.core.database.create_async_engine") as mock_create:
+                mock_create.return_value = MagicMock()
+                get_engine()
+
+        kwargs = mock_create.call_args[1]
+        assert "poolclass" not in kwargs
+        assert kwargs["pool_size"] == 5
+        assert kwargs["pool_pre_ping"] is True
 
 
 class TestGetSessionFactory:

@@ -7,7 +7,7 @@ Per DESIGN.md §5: async SQLAlchemy 2.0 + connection pool.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
 
@@ -30,14 +31,21 @@ def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         settings = get_settings()
-        _engine = create_async_engine(
-            settings.database_url,
-            pool_size=settings.db_pool_size,
-            max_overflow=settings.db_max_overflow,
-            echo=settings.db_echo,
-            pool_pre_ping=True,
-            pool_recycle=3600,
-        )
+        kwargs: dict[str, Any] = {"echo": settings.db_echo}
+        if settings.db_use_null_pool:
+            # Celery worker/beat 每个任务都跑在一个新建的事件循环上,任务结束即关闭。
+            # asyncpg 连接绑定在创建它的循环上,后续任务(新循环)复用池中连接会抛
+            # "RuntimeError: ... Future ... attached to a different loop"。
+            # NullPool 每次用完即弃连接 -> 不存在跨循环复用。
+            kwargs["poolclass"] = NullPool
+        else:
+            kwargs.update(
+                pool_size=settings.db_pool_size,
+                max_overflow=settings.db_max_overflow,
+                pool_pre_ping=True,
+                pool_recycle=3600,
+            )
+        _engine = create_async_engine(settings.database_url, **kwargs)
     return _engine
 
 
