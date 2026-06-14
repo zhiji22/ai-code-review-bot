@@ -115,7 +115,7 @@ class StatsService:
             avg_maintainability_score=round(float(scores.avg_maintainability or 0), 1)
             if scores
             else 0.0,
-            total_llm_cost_usd=round(float(llm.cost or 0), 4) if llm else 0.0,
+            total_llm_cost_usd=round(float(llm.cost or 0), 6) if llm else 0.0,
             total_llm_tokens=int(llm.tokens or 0) if llm else 0,
             cache_hit_rate=round(llm_cached / llm_requests, 4) if llm_requests else 0.0,
         )

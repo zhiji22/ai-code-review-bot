@@ -42,19 +42,24 @@ ISSUE_TOLERANCE_PER_100_LOC = {
 }
 
 # --- LLM Cost Constants (USD per 1M tokens) ---
-# Pricing for common models (as of 2024)
+# Base-tier prices. DashScope uses tiered billing (rate depends on prompt size
+# per request), so these are conservative base-tier estimates — verify against
+# the 百炼/Model Studio console and adjust if needed.
+# Sources: alibabacloud.com/help/en/model-studio/models, pricepertoken.com
 LLM_PRICING_PER_1M_TOKENS = {
-    # Qwen models (Alibaba DashScope)
-    "qwen-plus": {"prompt": 0.004, "completion": 0.012},
-    "qwen-turbo": {"prompt": 0.002, "completion": 0.006},
-    "qwen-max": {"prompt": 0.02, "completion": 0.06},
+    # Qwen models (Alibaba DashScope) — base tier
+    # qwen-plus: $0.40/$1.20 (source: alibabacloud.com/help/en/model-studio/model-pricing)
+    # qwen-max: $1.60/$6.40 (source: portkey.ai/models/dashscope/qwen-max)
+    "qwen-plus": {"prompt": 0.40, "completion": 1.20},
+    "qwen-turbo": {"prompt": 0.05, "completion": 0.20},  # cheapest tier, verify
+    "qwen-max": {"prompt": 1.60, "completion": 6.40},
     # OpenAI models
     "gpt-4o": {"prompt": 2.50, "completion": 10.00},
     "gpt-4o-mini": {"prompt": 0.15, "completion": 0.60},
     "gpt-4-turbo": {"prompt": 10.00, "completion": 30.00},
     "gpt-3.5-turbo": {"prompt": 0.50, "completion": 1.50},
-    # Default fallback
-    "default": {"prompt": 0.01, "completion": 0.03},
+    # Default fallback (mid-range; avoids wildly under-counting unknown models)
+    "default": {"prompt": 0.50, "completion": 1.50},
 }
 
 
