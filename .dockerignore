@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+.dockerignore
+Dockerfile*
+docker-compose*.yml
+
+# Misc
+*.md
+LICENSE
+DESIGN.md
+README.md
+.editorconfig
+.pre-commit-config.yaml
+.mypy_cache/
+.ruff_cache/
+*.log
+*.tmp
+.env.local
+.env.*.local
+
+# Frontend (backend image doesn't need these)
+frontend/
+node_modules/
+
+# Data (should not be in image)
+data/
+backups/
+*.pem
+*.key
