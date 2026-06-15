@@ -37,6 +37,7 @@ class RuleListSchema(BaseModel):
     id: int
     rule_id: str
     name: str
+    description: str | None = None
     category: str
     severity: str
     enabled: bool = True

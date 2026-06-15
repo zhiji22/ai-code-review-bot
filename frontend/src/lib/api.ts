@@ -144,17 +144,17 @@ export interface Rule {
   id: number;
   rule_id: string;
   name: string;
-  description: string;
+  description?: string;
   category: "security" | "performance" | "style" | "best_practices";
   severity: "critical" | "warning" | "info";
-  pattern: string;
-  message: string;
-  suggestion: string;
-  languages: string[];
+  pattern?: string;
+  message?: string;
+  suggestion?: string;
+  languages?: string[];
   enabled: boolean;
   is_builtin: boolean;
-  repository_id: number | null;
-  created_at: string;
+  repository_id?: number | null;
+  created_at?: string;
 }
 
 export interface OverviewStats {

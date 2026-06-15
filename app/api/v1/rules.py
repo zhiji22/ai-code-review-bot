@@ -49,6 +49,7 @@ async def list_rules(
             id=r.id,
             rule_id=r.rule_id,
             name=r.name,
+            description=r.description,
             category=r.category,
             severity=r.severity,
             enabled=r.enabled,
