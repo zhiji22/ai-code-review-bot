@@ -21,11 +21,6 @@ on:
         options:
           - staging
           - production
-      ref:
-        description: "Git ref to deploy (branch, tag, or commit SHA)"
-        required: true
-        default: main
-        type: string
 
 permissions:
   contents: read
@@ -39,8 +34,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
 
       - name: Set up SSH
         run: |
