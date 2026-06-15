@@ -47,11 +47,11 @@ structlog==24.4.0
 rich==13.9.4
 
 # --- 测试 ---
-pytest==8.3.4
-pytest-asyncio==0.24.0
-pytest-cov==6.0.0
-respx==0.21.1          # mock httpx 请求
-fakeredis==2.26.1       # mock Redis
+pytest==9.1.0
+pytest-asyncio==1.4.0
+pytest-cov==7.1.0
+respx==0.23.1          # mock httpx 请求
+fakeredis==2.36.1       # mock Redis
 
 # --- 代码质量 ---
 ruff==0.8.4
