@@ -62,8 +62,10 @@ jobs:
             pyproject.toml \
             scripts/ \
             .env.example \
-            .dockerignore.backend \
-            .dockerignore.frontend
+            Dockerfile.backend.dockerignore \
+            Dockerfile.frontend.dockerignore \
+            docker-entrypoint.sh \
+            docker-compose.yml
 
       - name: Upload to server
         run: |
@@ -90,12 +92,17 @@ jobs:
             # Extract new code (now guaranteed clean state)
             tar xzf /tmp/deploy.tar.gz -C .
 
-            # Build backend services (backend, worker, beat)
-            cp .dockerignore.backend .dockerignore
+            # 清理旧版 cp-based 部署遗留的 .dockerignore。
+            # 注意：这只是清理冗余。当存在 Dockerfile.<name>.dockerignore 时，
+            # BuildKit 会完全忽略根目录的 .dockerignore（不是合并、不是回退）。
+            rm -f .dockerignore
+
+            # 构建 backend 系列服务（backend、worker、beat）。
+            # 无需再 cp 切换 .dockerignore：BuildKit 会自动加载与
+            # Dockerfile.backend 同名的 Dockerfile.backend.dockerignore。
             docker compose build backend worker beat
 
-            # Build frontend service (nginx)
-            cp .dockerignore.frontend .dockerignore
+            # 构建 frontend 服务（nginx）— 自动使用 Dockerfile.frontend.dockerignore
             docker compose build nginx
 
             # Pull updated images for services that use `image:` (postgres/redis).

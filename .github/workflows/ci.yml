@@ -163,9 +163,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Prepare backend dockerignore
-        run: cp .dockerignore.backend .dockerignore
-
       - name: Build backend image
         uses: docker/build-push-action@v5
         with:
@@ -175,9 +172,6 @@ jobs:
           tags: ai-code-review-bot:ci-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Prepare frontend dockerignore
-        run: cp .dockerignore.frontend .dockerignore
 
       - name: Build frontend image
         uses: docker/build-push-action@v5
