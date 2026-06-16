@@ -24,12 +24,6 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const hasHydrated = useHasHydrated();
 
-  console.log("ProtectedRoute", {
-    hasHydrated,
-    isAuthenticated,
-    accessToken: localStorage.getItem("access_token"),
-  });
-
   // Wait for Zustand persist to rehydrate from localStorage before deciding.
   // Without this, isAuthenticated defaults to false on page refresh, causing a
   // premature redirect to /login even though valid tokens exist in localStorage.
