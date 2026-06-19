@@ -40,10 +40,7 @@ class TestParseValidDiffLines:
         assert parse_valid_diff_lines("binary file, no patch") == []
 
     def test_multiple_hunks(self) -> None:
-        patch = (
-            "@@ -1,2 +1,2 @@\n a\n-b\n+C\n"
-            "@@ -10,2 +11,2 @@\n d\n-e\n+F\n"
-        )
+        patch = "@@ -1,2 +1,2 @@\n a\n-b\n+C\n" "@@ -10,2 +11,2 @@\n d\n-e\n+F\n"
         # hunk1: 1(context a), 2(C). hunk2: 11(d), 12(F).
         assert parse_valid_diff_lines(patch) == [1, 2, 11, 12]
 
@@ -138,19 +135,32 @@ class TestFormatInlinePayloadSnapping:
         res = AggregatedResult(
             issues=[
                 UnifiedIssue(
-                    file_path="good.py", line_number=11, source="llm",
-                    category="security", severity="critical", message="ok",
+                    file_path="good.py",
+                    line_number=11,
+                    source="llm",
+                    category="security",
+                    severity="critical",
+                    message="ok",
                 ),
                 UnifiedIssue(
-                    file_path="bad.py", line_number=5, source="llm",
-                    category="security", severity="critical", message="nope",
+                    file_path="bad.py",
+                    line_number=5,
+                    source="llm",
+                    category="security",
+                    severity="critical",
+                    message="nope",
                 ),
             ],
             scores=ReviewScores(overall=50, security=50, performance=50, maintainability=50),
-            summary="", files_reviewed=2, lines_of_code=20, llm_summary="", llm_tokens=0,
+            summary="",
+            files_reviewed=2,
+            lines_of_code=20,
+            llm_summary="",
+            llm_tokens=0,
         )
         payload = fmt.format_inline_comments_payload(
-            res, max_comments=50,
+            res,
+            max_comments=50,
             valid_lines_by_file={"good.py": [10, 11, 12], "bad.py": []},
         )
         assert len(payload) == 1

@@ -40,7 +40,9 @@ class TestRedisLoopAware:
         _reset_redis_module()
         loop = asyncio.new_event_loop()
         try:
-            with patch("app.core.redis.redis.Redis.from_url", side_effect=_NEW_CLIENT_EACH_CALL) as mock_from_url:
+            with patch(
+                "app.core.redis.redis.Redis.from_url", side_effect=_NEW_CLIENT_EACH_CALL
+            ) as mock_from_url:
                 c1 = loop.run_until_complete(_call_get_redis())
                 c2 = loop.run_until_complete(_call_get_redis())
                 assert c1 is c2
@@ -55,7 +57,9 @@ class TestRedisLoopAware:
         loop1 = asyncio.new_event_loop()
         loop2 = asyncio.new_event_loop()
         try:
-            with patch("app.core.redis.redis.Redis.from_url", side_effect=_NEW_CLIENT_EACH_CALL) as mock_from_url:
+            with patch(
+                "app.core.redis.redis.Redis.from_url", side_effect=_NEW_CLIENT_EACH_CALL
+            ) as mock_from_url:
                 c1 = loop1.run_until_complete(_call_get_redis())
                 # loop1 corresponds to a finished task; next task runs on loop2.
                 c2 = loop2.run_until_complete(_call_get_redis())

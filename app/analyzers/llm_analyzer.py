@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import structlog
 from dataclasses import dataclass, field
 from typing import Any
 
+import structlog
 from openai import (
     APIError,
     APITimeoutError,
@@ -315,10 +315,12 @@ def _build_user_prompt(
                 "```",
             ]
         )
-    parts.extend([
-        "",
-        "请分析以上 diff 并用中文给出审查意见，严格按照 JSON schema 格式返回。",
-    ])
+    parts.extend(
+        [
+            "",
+            "请分析以上 diff 并用中文给出审查意见，严格按照 JSON schema 格式返回。",
+        ]
+    )
     return "\n".join(parts)
 
 

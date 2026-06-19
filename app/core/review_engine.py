@@ -172,9 +172,7 @@ class ReviewEngine:
             # Build a per-file map of diff-valid RIGHT-side line numbers so inline
             # comments snap to anchorable lines instead of failing the whole review
             # with HTTP 422 (line outside diff hunk).
-            valid_lines_by_file = {
-                f.file_path: parse_valid_diff_lines(f.raw_patch) for f in files
-            }
+            valid_lines_by_file = {f.file_path: parse_valid_diff_lines(f.raw_patch) for f in files}
             await self._post_to_github(
                 github_client,
                 repo_full_name,

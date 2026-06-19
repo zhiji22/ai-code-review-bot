@@ -36,18 +36,25 @@ def get_redis() -> redis.Redis:
         # Called outside any loop — rare; fall back to whatever is cached.
         current_loop = None
 
-    if _redis_client is None or _redis_client_loop is not current_loop:
-        settings = get_settings()
-        _redis_client = redis.Redis.from_url(
-            settings.redis_url,
-            decode_responses=True,
-            socket_timeout=5,
-            socket_connect_timeout=5,
-            retry_on_timeout=True,
-            health_check_interval=30,
-        )
-        _redis_client_loop = current_loop
-    return _redis_client
+    # 缓存命中(非空且绑定在同一事件循环)直接复用。
+    # `is not None` 守卫在此分支内把全局收窄为 Redis。
+    if _redis_client is not None and _redis_client_loop is current_loop:
+        return _redis_client
+
+    # 否则按当前循环(重新)创建。mypy 对全局变量不持久收窄,故用局部 client
+    # 承载新建实例并 return 它,全局只用于缓存。
+    settings = get_settings()
+    client: redis.Redis = redis.Redis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        socket_timeout=5,
+        socket_connect_timeout=5,
+        retry_on_timeout=True,
+        health_check_interval=30,
+    )
+    _redis_client = client
+    _redis_client_loop = current_loop
+    return client
 
 
 async def close_redis() -> None:

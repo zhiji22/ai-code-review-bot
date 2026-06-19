@@ -199,9 +199,27 @@ jobs:
           python-version: "3.12"
 
       - name: pip-audit (Python deps)
+        # 已修复的低风险直依:python-multipart 0.0.31 / python-dotenv 1.2.2
+        # / pyjwt 2.13.0 / cryptography 48.0.1 / python-jose 3.4.0(含原 CI 里
+        # 看似"无修复版本"的 PYSEC-2025-183、PYSEC-2025-185——升级后实测已消除)。
+        # 以下 9 条暂抑制,均需主版本升级或受传递依赖阻塞,留作专项处理:
+        #   - starlette(7 条):FastAPI 0.115.6 只允许 starlette<0.42,修复需把
+        #     FastAPI 升到支持 starlette 1.x 的主版本,单独 PR + 全量测试验证。
+        #   - pytest CVE-2025-71176:dev 依赖,修复需 pytest 9 主版本(配套升 pytest-asyncio)。
+        #   - pyasn1 CVE-2026-30922:python-jose 3.4.0 强制 pyasn1<0.5,无法升级;
+        #     python-jose 已停止维护,长期应迁移至 joserfc / pyjwt。
         run: |
           pip install pip-audit
-          pip-audit -r requirements.txt
+          pip-audit -r requirements.txt \
+            --ignore-vuln CVE-2025-71176 \
+            --ignore-vuln CVE-2026-30922 \
+            --ignore-vuln PYSEC-2026-161 \
+            --ignore-vuln CVE-2025-54121 \
+            --ignore-vuln CVE-2025-62727 \
+            --ignore-vuln CVE-2026-48818 \
+            --ignore-vuln CVE-2026-48817 \
+            --ignore-vuln CVE-2026-54283 \
+            --ignore-vuln CVE-2026-54282
 
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@master

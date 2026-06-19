@@ -310,21 +310,13 @@ class CommentFormatter:
                 "合并前必须修复。请修复后重新请求审查。"
             )
         if result.warning_count > 3:
-            return (
-                "### 💡 建议\n\n"
-                "检测到多个警告。建议在合并前处理这些问题，以提升代码质量。"
-            )
-        return (
-            "### ✅ 建议\n\n"
-            "代码质量良好！次要建议可酌情处理。"
-        )
+            return "### 💡 建议\n\n" "检测到多个警告。建议在合并前处理这些问题，以提升代码质量。"
+        return "### ✅ 建议\n\n" "代码质量良好！次要建议可酌情处理。"
 
     def _format_footer(self) -> str:
         """Bot footer."""
         return (
-            "---\n"
-            "<sub>🤖 由 AI 代码审查机器人生成 · "
-            "[配置](/settings) · [文档](/docs)</sub>"
+            "---\n" "<sub>🤖 由 AI 代码审查机器人生成 · " "[配置](/settings) · [文档](/docs)</sub>"
         )
 
 

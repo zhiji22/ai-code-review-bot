@@ -68,7 +68,7 @@ class AuthService:
     @staticmethod
     def decode_token(token: str) -> dict[str, Any]:
         """Decode + verify JWT. Raises jwt.PyJWTError on invalid."""
-        return jwt.decode(  # type: ignore[no-any-return]
+        return jwt.decode(
             token,
             settings.secret_key,
             algorithms=["HS256"],

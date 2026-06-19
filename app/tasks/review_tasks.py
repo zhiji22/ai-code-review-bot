@@ -136,9 +136,7 @@ async def _execute_review_pipeline(
 
         # Persist to database
         async with get_db_session() as session:
-            stmt = select(Repository).where(
-                Repository.full_name == repo_full_name
-            )
+            stmt = select(Repository).where(Repository.full_name == repo_full_name)
             repo_result = await session.execute(stmt)
             repo = repo_result.scalar_one_or_none()
 

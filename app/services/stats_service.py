@@ -58,8 +58,7 @@ class StatsService:
                 func.avg(subq.c.security_score).label("avg_security"),
                 func.avg(subq.c.performance_score).label("avg_performance"),
                 func.avg(subq.c.maintainability_score).label("avg_maintainability"),
-            )
-            .select_from(subq)
+            ).select_from(subq)
         )
         scores = score_row.one_or_none()
 
@@ -69,8 +68,7 @@ class StatsService:
                 func.sum(subq.c.critical_count).label("critical"),
                 func.sum(subq.c.warning_count).label("warning"),
                 func.sum(subq.c.info_count).label("info"),
-            )
-            .select_from(subq)
+            ).select_from(subq)
         )
         issues = issue_row.one_or_none()
 

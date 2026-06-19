@@ -4,7 +4,7 @@
 # --- Web 框架 ---
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
-python-multipart==0.0.12
+python-multipart==0.0.31
 
 # --- 数据库 ---
 sqlalchemy[asyncio]==2.0.36
@@ -34,15 +34,15 @@ tree-sitter-typescript==0.23.2
 httpx==0.28.1
 
 # --- 安全/认证 ---
-pyjwt[crypto]==2.10.1
-cryptography==44.0.0
-python-jose[cryptography]==3.3.0
+pyjwt[crypto]==2.13.0
+cryptography==48.0.1
+python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
 
 # --- 工具库 ---
 pydantic[email]==2.10.3
 pydantic-settings==2.6.0
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 structlog==24.4.0
 rich==13.9.4
 

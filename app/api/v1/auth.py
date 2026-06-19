@@ -6,7 +6,7 @@ import logging
 from typing import Annotated
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser
@@ -14,8 +14,6 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limit import check_rate_limit
 from app.models.user import User
-
-from fastapi import Request
 from app.schemas.common import ApiResponse
 from app.schemas.users import (
     GitHubLoginResponseSchema,
