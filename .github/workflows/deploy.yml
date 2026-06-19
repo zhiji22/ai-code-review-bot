@@ -104,10 +104,17 @@ jobs:
             # 构建 backend 系列服务（backend、worker、beat）。
             # 无需再 cp 切换 .dockerignore：BuildKit 会自动加载与
             # Dockerfile.backend 同名的 Dockerfile.backend.dockerignore。
-            docker compose build backend worker beat
+            #
+            # ── 强制 --no-cache（关键修复）──
+            # 实测:仅靠 BuildKit 层缓存会出现"部署成功但前端页面仍是旧代码":
+            # `COPY frontend/ .` 的缓存键未随源码变化失效 → 构建复用旧 builder
+            # 阶段 → `COPY --from=builder /app/dist` 拷出的是旧 dist。
+            # --no-cache 强制每层重跑,保证产物由最新源码 build 而成,且生成新
+            # 镜像 ID 触发 `up -d` 重建容器。(与 docs/DEPLOYMENT.md 部署说明一致。)
+            docker compose build --no-cache backend worker beat
 
             # 构建 frontend 服务（nginx）— 自动使用 Dockerfile.frontend.dockerignore
-            docker compose build nginx
+            docker compose build --no-cache nginx
 
             # Pull updated images for services that use `image:` (postgres/redis).
             # `up -d` only pulls when the image is absent, so explicit pull is
@@ -120,9 +127,19 @@ jobs:
             # Restart all services
             docker compose up -d --remove-orphans
 
-            # Health check
+            # Backend health check
             sleep 15
             curl -fsS http://localhost:8000/health || exit 1
+
+            # 前端探活:确认 nginx 真的 serve 了带 JS hash 的 index.html。
+            # 之前健康检查只查后端 :8000/health,前端旧了/空了也能"绿灯"——
+            # 这一步堵住盲区:拿不到有效 hash 就让整个部署失败。
+            FRONT_HASH="$(curl -fsS http://localhost/ 2>/dev/null | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -n1 || true)"
+            if [ -z "$FRONT_HASH" ]; then
+              echo "ERROR: nginx 未 serve 有效的 index.html(前端构建可能失败)"
+              exit 1
+            fi
+            echo "部署成功,前端入口: $FRONT_HASH"
 
             # Cleanup
             rm /tmp/deploy.tar.gz
