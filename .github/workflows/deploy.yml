@@ -124,8 +124,13 @@ jobs:
             # Run database migrations
             docker compose run --rm backend alembic upgrade head
 
-            # Restart all services
-            docker compose up -d --remove-orphans
+            # Restart all services —— 强制重建容器(关键修复)
+            # 仅 `docker compose build` 重建镜像后,`up -d` 默认不会把"从源码 build"
+            # 的服务(nginx/backend/worker/beat)的旧容器换成新镜像:实测这些容器能
+            # 连续数天不重建、一直 serve 旧代码,而新镜像躺在硬盘上没人用。
+            # --force-recreate 强制每次部署都从刚 build 的镜像起新容器,保证上桌的
+            # 就是最新产物。postgres/redis 数据在 named volume,重建安全无损。
+            docker compose up -d --remove-orphans --force-recreate
 
             # Backend health check
             sleep 15
@@ -140,6 +145,9 @@ jobs:
               exit 1
             fi
             echo "部署成功,前端入口: $FRONT_HASH"
+
+            # 记录本次部署的 commit SHA,供服务器查版本(服务器已不保留 .git)
+            echo "${{ github.sha }}" > .deployed-commit
 
             # Cleanup
             rm /tmp/deploy.tar.gz
