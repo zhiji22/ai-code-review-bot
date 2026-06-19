@@ -6,11 +6,15 @@ on:
     branches: [main]
     paths:
       - "app/**"
-      - "frontend/src/**"
+      - "frontend/**"          # 覆盖 index.html / vite.config / tailwind / postcss 等构建配置,不只是 src
+      - "docker/**"            # 覆盖 nginx.conf 等容器配置
       - "docker-compose.yml"
       - "Dockerfile.*"
       - "requirements.txt"
+      - "pyproject.toml"
       - "alembic/**"
+      - "alembic.ini"
+      - "scripts/"
   workflow_dispatch:
     inputs:
       environment:
