@@ -35,6 +35,11 @@ export function formatRelative(date: string | Date): string {
   return d.toLocaleDateString();
 }
 
+/** Truncate a git commit SHA to its short 7-char form (GitHub convention) */
+export function shortSha(sha: string | null | undefined): string {
+  return (sha ?? "").slice(0, 7);
+}
+
 /** Score color helper */
 export function scoreColor(score: number): string {
   if (score >= 80) return "text-green-500";

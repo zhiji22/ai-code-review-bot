@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Spinner } from "@/components/ui/spinner";
 import { reviewsApi } from "@/lib/api";
-import { formatRelative, scoreColor } from "@/lib/utils";
+import { formatRelative, scoreColor, shortSha } from "@/lib/utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function ReviewsPage() {
@@ -61,6 +61,11 @@ export default function ReviewsPage() {
                     <TableCell>
                       <Link to={`/reviews/${r.id}`} className="font-medium hover:underline">
                         #{r.pr_number} — {r.pr_title}
+                        {r.commit_sha && (
+                          <span className="ml-2 font-mono text-xs text-muted-foreground">
+                            {shortSha(r.commit_sha)}
+                          </span>
+                        )}
                       </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{r.pr_author}</TableCell>

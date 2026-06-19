@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { reviewsApi } from "@/lib/api";
-import { formatRelative, scoreColor, severityColor } from "@/lib/utils";
+import { formatRelative, scoreColor, severityColor, shortSha } from "@/lib/utils";
 import { ArrowLeft, AlertOctagon, AlertTriangle, Info } from "lucide-react";
 
 export default function ReviewDetailPage() {
@@ -57,6 +57,11 @@ export default function ReviewDetailPage() {
         <div>
           <h1 className="text-2xl font-bold">
             PR #{review.pr_number} — {review.pr_title}
+            {review.commit_sha && (
+              <span className="ml-2 align-middle font-mono text-sm font-normal text-muted-foreground">
+                {shortSha(review.commit_sha)}
+              </span>
+            )}
           </h1>
           <p className="text-sm text-muted-foreground">
             by {review.pr_author} • {formatRelative(review.created_at)}

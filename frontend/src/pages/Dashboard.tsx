@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { statsApi, reviewsApi } from "@/lib/api";
-import { formatNumber, formatCost, scoreColor } from "@/lib/utils";
+import { formatNumber, formatCost, scoreColor, shortSha } from "@/lib/utils";
 import {
   LineChart,
   Line,
@@ -245,7 +245,12 @@ export default function DashboardPage() {
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">PR #{r.pr_number} — {r.pr_title}</p>
-                    <p className="text-xs text-muted-foreground">by {r.pr_author}</p>
+                    <p className="text-xs text-muted-foreground">
+                      by {r.pr_author}
+                      {r.commit_sha && (
+                        <span className="ml-2 font-mono">{shortSha(r.commit_sha)}</span>
+                      )}
+                    </p>
                   </div>
                   <div className="flex items-center gap-3">
                     <Badge variant={r.status === "completed" ? "default" : "secondary"}>{r.status}</Badge>
