@@ -90,10 +90,17 @@ jobs:
       GITHUB_APP_ID: "123456"
       GITHUB_CLIENT_ID: test-client-id
       GITHUB_CLIENT_SECRET: test-client-secret
-      GITHUB_APP_PRIVATE_KEY_PATH: ""
+      # Non-empty dummy; config validates min_length=1. The file is only read
+      # when authenticating as a GitHub App, which never happens in CI.
+      GITHUB_APP_PRIVATE_KEY_PATH: /tmp/dummy-github-key.pem
       OPENAI_API_BASE: https://dashscope.aliyuncs.com/compatible-mode/v1
       OPENAI_MODEL: qwen-plus
       CORS_ORIGINS: http://localhost:3000
+      # config.py builds the DB URL from these (not from DATABASE_URL, which is
+      # ignored). Match the `postgres` service below: review:review@review_test.
+      DB_USER: review
+      DB_PASSWORD: review
+      DB_NAME: review_test
 
     steps:
       - uses: actions/checkout@v4

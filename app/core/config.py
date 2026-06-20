@@ -7,10 +7,60 @@ Per DESIGN.md §5/§9: All config from environment variables with validation.
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Literal
+from typing import Any, Literal, get_origin
 
 from pydantic import Field, computed_field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic.fields import FieldInfo
+from pydantic_settings import (
+    BaseSettings,
+    DotEnvSettingsSource,
+    EnvSettingsSource,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
+
+# Annotation origins that we accept as comma-separated lists from the
+# environment (see ``_split_csv_if_list`` below).
+_LIST_ORIGINS = frozenset({list, set, tuple, frozenset})
+
+
+def _split_csv_if_list(field: FieldInfo, value: Any) -> list[str] | None:
+    """Return a comma-split list for list-typed string values, else ``None``.
+
+    pydantic-settings 2.x JSON-parses complex fields (lists/dicts) from the
+    environment, so a comma-separated ``CORS_ORIGINS=http://a,http://b`` — the
+    convention documented in ``.env.example`` — raises ``SettingsError``. This
+    helper powers the fallback (JSON is tried first in the sources below).
+    """
+    if isinstance(value, str) and get_origin(field.annotation) in _LIST_ORIGINS:
+        return [item.strip() for item in value.split(",") if item.strip()]
+    return None
+
+
+class _CsvEnvSettingsSource(EnvSettingsSource):
+    """Env source that accepts comma-separated list values (JSON tried first)."""
+
+    def decode_complex_value(self, field_name: str, field: FieldInfo, value: Any) -> Any:
+        try:
+            return super().decode_complex_value(field_name, field, value)
+        except (ValueError, TypeError):
+            split = _split_csv_if_list(field, value)
+            if split is not None:
+                return split
+            raise
+
+
+class _CsvDotEnvSettingsSource(DotEnvSettingsSource):
+    """.env file source that accepts comma-separated list values (JSON tried first)."""
+
+    def decode_complex_value(self, field_name: str, field: FieldInfo, value: Any) -> Any:
+        try:
+            return super().decode_complex_value(field_name, field, value)
+        except (ValueError, TypeError):
+            split = _split_csv_if_list(field, value)
+            if split is not None:
+                return split
+            raise
 
 
 class Settings(BaseSettings):
@@ -26,6 +76,29 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Honor comma-separated list values (e.g. ``CORS_ORIGINS``).
+
+        ``.env.example`` documents ``CORS_ORIGINS`` as comma-separated, but
+        pydantic-settings JSON-decodes list fields and fails on non-JSON input
+        (which broke ``alembic upgrade head`` in CI). Swap in sources that try
+        JSON first, then fall back to a comma split. JSON arrays still work.
+        """
+        return (
+            init_settings,
+            _CsvEnvSettingsSource(settings_cls),
+            _CsvDotEnvSettingsSource(settings_cls),
+            file_secret_settings,
+        )
 
     # ── App ──────────────────────────────────────────────
     app_env: Literal["development", "staging", "production"] = "development"
