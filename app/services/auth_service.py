@@ -241,14 +241,31 @@ class AuthService:
         async with httpx.AsyncClient(**client_kwargs) as client:
             access_token = settings.guest_github_token
 
-            user_resp = await client.get(
-                "https://api.github.com/user",
-                headers={
-                    "Authorization": f"token {access_token}",
-                    "Accept": "application/vnd.github+json",
-                },
-            )
-            user_resp.raise_for_status()
+            try:
+                user_resp = await client.get(
+                    "https://api.github.com/user",
+                    headers={
+                        "Authorization": f"token {access_token}",
+                        "Accept": "application/vnd.github+json",
+                    },
+                )
+                user_resp.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                # GitHub rejected the guest PAT (401 = bad/expired/revoked token,
+                # 403 = valid token lacking scope). This is a server-side config
+                # error, not a transient failure — surface a clear ValueError that
+                # the endpoint maps to 400, instead of letting it fall through to
+                # a misleading generic 500 "try again later" (retrying won't help
+                # until the admin rotates GUEST_GITHUB_TOKEN).
+                logger.error(
+                    "Guest login: GitHub rejected PAT with HTTP %d — "
+                    "rotate GUEST_GITHUB_TOKEN (needs read:user scope)",
+                    exc.response.status_code,
+                )
+                raise ValueError(
+                    "Guest account token is invalid or expired "
+                    "(ask the administrator to rotate GUEST_GITHUB_TOKEN)."
+                ) from exc
             gh_user = user_resp.json()
 
         # Upsert user

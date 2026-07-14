@@ -412,3 +412,82 @@ class TestUserLookups:
 
         result = await auth_service.get_user_by_github_id(99999)
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# 14. Guest login
+# ---------------------------------------------------------------------------
+
+
+class TestGuestLogin:
+    """Tests for AuthService.guest_login (async instance method)."""
+
+    @pytest.mark.asyncio
+    async def test_token_not_configured_raises(
+        self,
+        auth_service: AuthService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Empty/None GUEST_GITHUB_TOKEN → ValueError (endpoint maps to 400)."""
+        monkeypatch.setattr(settings, "guest_github_token", None)
+        with pytest.raises(ValueError, match="not configured"):
+            await auth_service.guest_login()
+
+    @pytest.mark.asyncio
+    async def test_invalid_token_raises_value_error(
+        self,
+        auth_service: AuthService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """GitHub 401 on /user → ValueError with a clear message, NOT HTTPStatusError.
+
+        Regression test: previously an expired/invalid guest PAT let the raw
+        ``httpx.HTTPStatusError`` propagate, which the endpoint turned into a
+        misleading generic 500 "try again later". It must now surface a
+        config-specific ValueError (→ 400) so the admin knows to rotate the token.
+        """
+        import httpx
+
+        monkeypatch.setattr(settings, "guest_github_token", FAKE_GH_TOKEN)
+
+        # Real 401 Response so raise_for_status() raises a genuine HTTPStatusError.
+        request = httpx.Request("GET", "https://api.github.com/user")
+        user_response = httpx.Response(status_code=401, request=request)
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = user_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.services.auth_service.httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(ValueError, match="invalid or expired"):
+                await auth_service.guest_login()
+
+    @pytest.mark.asyncio
+    async def test_success(
+        self,
+        auth_service: AuthService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Valid guest token → user info fetched → user upserted."""
+        monkeypatch.setattr(settings, "guest_github_token", FAKE_GH_TOKEN)
+
+        user_response = MagicMock()
+        user_response.status_code = 200
+        user_response.json.return_value = FAKE_GH_USER
+        user_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = user_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        mock_user = MagicMock()
+        with patch("app.services.auth_service.httpx.AsyncClient", return_value=mock_client):
+            with patch.object(auth_service, "_upsert_user", return_value=mock_user) as mock_upsert:
+                result = await auth_service.guest_login()
+
+        assert result["user"] is mock_user
+        assert result["github_token"] == FAKE_GH_TOKEN
+        assert result["github_data"] == FAKE_GH_USER
+        mock_upsert.assert_awaited_once_with(FAKE_GH_USER, FAKE_GH_TOKEN)
