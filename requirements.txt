@@ -34,9 +34,10 @@ tree-sitter-typescript==0.23.2
 httpx==0.28.1
 
 # --- 安全/认证 ---
+# NOTE: python-jose 已移除——全项目无任何 import(认证统一用 PyJWT),
+# 且它已停止维护、强行 pin 了有漏洞且无修复版本的 ecdsa / pyasn1。
 pyjwt[crypto]==2.13.0
 cryptography==48.0.1
-python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
 
 # --- 工具库 ---
