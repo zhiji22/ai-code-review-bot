@@ -7,9 +7,9 @@ uvicorn[standard]==0.32.1
 python-multipart==0.0.31
 
 # --- 数据库 ---
-sqlalchemy[asyncio]==2.0.36
+sqlalchemy[asyncio]==2.0.51
 asyncpg==0.30.0
-alembic==1.14.0
+alembic==1.18.5
 psycopg[binary]==3.2.3
 
 # --- Redis ---
