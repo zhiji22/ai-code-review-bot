@@ -2,7 +2,7 @@
 # AI Code Review Bot - Python Dependencies
 
 # --- Web 框架 ---
-fastapi==0.115.6
+fastapi==0.139.2
 uvicorn[standard]==0.32.1
 python-multipart==0.0.31
 
