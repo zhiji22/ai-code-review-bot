@@ -41,14 +41,19 @@ class StatsService:
         """High-level overview stats."""
         since = datetime.now(UTC) - timedelta(days=days)
 
+        # 30-day rolling window for score/issue/cost metrics below.
         base = select(Review).where(Review.created_at >= since)
         if repository_id:
             base = base.where(Review.repository_id == repository_id)
 
-        # Total reviews
-        total_reviews = int(
-            await self.session.scalar(select(func.count()).select_from(base.subquery())) or 0
-        )
+        # Total reviews — all-time count, NOT limited by the `days` window.
+        # This matches the Review History total so the Dashboard "Total
+        # Reviews" card and the History page agree. Counts directly on the
+        # table to avoid selecting every column.
+        total_reviews_stmt = select(func.count()).select_from(Review)
+        if repository_id:
+            total_reviews_stmt = total_reviews_stmt.where(Review.repository_id == repository_id)
+        total_reviews = int(await self.session.scalar(total_reviews_stmt) or 0)
 
         # Average scores — use subquery columns to avoid cartesian product
         subq = base.subquery()

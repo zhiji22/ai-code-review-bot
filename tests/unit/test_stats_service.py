@@ -179,6 +179,35 @@ class TestStatsServiceOverview:
         assert "repository_id" in first_query_str
 
     @pytest.mark.asyncio
+    async def test_overview_total_reviews_counts_all_history(self) -> None:
+        """total_reviews counts ALL reviews, not just the last `days` window.
+
+        Regression: the Dashboard 'Total Reviews' card must match the Review
+        History total, so it must NOT be filtered by the 30-day created_at
+        window (which only applies to the rolling score/issue/cost metrics).
+        """
+        session = AsyncMock()
+        service = StatsService(session)
+
+        # total_reviews=10 (all-time), total_repos=1
+        session.scalar.side_effect = [10, 1]
+
+        score_result = _make_execute_result_for_row(_make_score_row())
+        issue_result = _make_execute_result_for_row(_make_issue_row())
+        llm_result = _make_execute_result_for_row(_make_llm_row())
+        session.execute.side_effect = [score_result, issue_result, llm_result]
+
+        result = await service.overview(days=30)
+
+        assert result.total_reviews == 10
+
+        # The total_reviews query (first scalar call) must NOT apply a
+        # created_at time filter — it counts all-time reviews.
+        scalar_calls = session.scalar.call_args_list
+        first_query_str = str(scalar_calls[0].args[0])
+        assert "created_at" not in first_query_str
+
+    @pytest.mark.asyncio
     async def test_overview_empty_data(self) -> None:
         """Returns all zeros when no reviews exist."""
         session = AsyncMock()
