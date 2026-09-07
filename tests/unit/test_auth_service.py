@@ -491,3 +491,73 @@ class TestGuestLogin:
         assert result["github_token"] == FAKE_GH_TOKEN
         assert result["github_data"] == FAKE_GH_USER
         mock_upsert.assert_awaited_once_with(FAKE_GH_USER, FAKE_GH_TOKEN)
+
+    @pytest.mark.asyncio
+    async def test_network_retry_then_success(
+        self,
+        auth_service: AuthService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """First /user call hits ConnectTimeout, second succeeds — mirrors the
+        retry pattern already used by github_oauth_exchange so guest login is
+        robust against flaky outbound networks (GFW, proxy restarts, etc.).
+        """
+        import httpx
+
+        monkeypatch.setattr(settings, "guest_github_token", FAKE_GH_TOKEN)
+
+        user_response = MagicMock()
+        user_response.status_code = 200
+        user_response.json.return_value = FAKE_GH_USER
+        user_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        # First get fails with ConnectTimeout, second succeeds.
+        mock_client.get.side_effect = [
+            httpx.ConnectTimeout("connection timed out"),
+            user_response,
+        ]
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        mock_user = MagicMock()
+
+        with patch("app.services.auth_service.httpx.AsyncClient", return_value=mock_client):
+            with patch("app.services.auth_service.asyncio.sleep", new_callable=AsyncMock):
+                with patch.object(auth_service, "_upsert_user", return_value=mock_user):
+                    result = await auth_service.guest_login()
+
+        assert result["github_data"] == FAKE_GH_USER
+        assert mock_client.get.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_network_all_retries_fail_raises_value_error(
+        self,
+        auth_service: AuthService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """All 3 /user attempts fail with network errors → ValueError, NOT a raw
+        httpx exception.
+
+        Regression: previously a ConnectTimeout (e.g. China-region server where
+        api.github.com is unreachable, or a broken HTTPS_PROXY) fell through
+        to the endpoint's bare ``except Exception`` and surfaced as a generic
+        500 "try again later" — misleading because retrying won't help until
+        the network/proxy is fixed. The user-facing message should make the
+        nature of the failure obvious.
+        """
+        import httpx
+
+        monkeypatch.setattr(settings, "guest_github_token", FAKE_GH_TOKEN)
+
+        mock_client = AsyncMock()
+        mock_client.get.side_effect = httpx.ConnectTimeout("connection timed out")
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.services.auth_service.httpx.AsyncClient", return_value=mock_client):
+            with patch("app.services.auth_service.asyncio.sleep", new_callable=AsyncMock):
+                with pytest.raises(ValueError, match="temporarily unavailable"):
+                    await auth_service.guest_login()
+
+        assert mock_client.get.call_count == 3

@@ -241,14 +241,38 @@ class AuthService:
         async with httpx.AsyncClient(**client_kwargs) as client:
             access_token = settings.guest_github_token
 
+            # Retry transient network failures (same pattern as github_oauth_exchange)
+            # so guest login is robust against flaky outbound networks.
+            user_resp: httpx.Response | None = None
+            for attempt in range(3):
+                try:
+                    user_resp = await client.get(
+                        "https://api.github.com/user",
+                        headers={
+                            "Authorization": f"token {access_token}",
+                            "Accept": "application/vnd.github+json",
+                        },
+                    )
+                    break
+                except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError) as exc:
+                    logger.warning(
+                        "Guest login: GitHub /user attempt %d failed (network): %s",
+                        attempt + 1,
+                        exc,
+                    )
+                    if attempt == 2:
+                        logger.error(
+                            "Guest login: all 3 attempts failed with network errors — "
+                            "check container egress to api.github.com and HTTPS_PROXY"
+                        )
+                        raise ValueError(
+                            "Guest login service is temporarily unavailable. "
+                            "Please try again later."
+                        ) from exc
+                    await asyncio.sleep(2.0 * (attempt + 1))
+
+            assert user_resp is not None  # loop either breaks or raises
             try:
-                user_resp = await client.get(
-                    "https://api.github.com/user",
-                    headers={
-                        "Authorization": f"token {access_token}",
-                        "Accept": "application/vnd.github+json",
-                    },
-                )
                 user_resp.raise_for_status()
             except httpx.HTTPStatusError as exc:
                 # GitHub rejected the guest PAT (401 = bad/expired/revoked token,
